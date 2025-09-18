@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Job } from './types';
-import { toDate, addDays, diffInDays, fmtInput, darkenColor } from './utils';
+import { Job } from './types.ts';
+import { toDate, addDays, diffInDays, fmtInput, darkenColor } from './utils.ts';
 
 interface TaskItemProps {
   job: Job;
@@ -119,7 +119,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ job, rowIndex, pxPerDay, chartStart
     };
   }, [dragState, pxPerDay, chartStartDate, onUpdate, onSelect, job, left, width]);
   
-  const overlapClasses = isOverlapping ? 'ring-2 ring-offset-1 ring-red-500' : 'shadow-sm';
+  const overlapClasses = isOverlapping ? 'ring-2 ring-offset-1 ring-red-500 dark:ring-offset-slate-700' : 'shadow-sm';
 
   return (
     <div

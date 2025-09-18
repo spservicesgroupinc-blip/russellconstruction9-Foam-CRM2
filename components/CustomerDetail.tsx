@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CustomerInfo } from './EstimatePDF';
-import { getEstimatesForCustomer, EstimateRecord } from '../lib/db';
-import { getGCSDownloadUrl } from '../lib/gcs';
+import { CustomerInfo } from './EstimatePDF.tsx';
+import { getEstimatesForCustomer, EstimateRecord } from '../lib/db.ts';
 
 interface CustomerDetailProps {
     customerId: number;
@@ -31,17 +30,13 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, customers, 
         }
     }, [customerId, customers]);
 
-    const handleViewPdf = async (filePath: string) => {
-        if (!filePath) {
-            alert("File path is missing.");
-            return;
-        }
+    const handleViewPdf = (pdfBlob: Blob) => {
         try {
-            const url = await getGCSDownloadUrl(filePath);
+            const url = URL.createObjectURL(pdfBlob);
             window.open(url, '_blank');
         } catch (error) {
-            console.error("Error getting GCS download URL", error);
-            alert("Could not open PDF. Please check the console for details.");
+            console.error("Error creating object URL", error);
+            alert("Could not open PDF. It may be corrupted.");
         }
     };
 
@@ -94,11 +89,11 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, customers, 
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
                                         {est.estimateNumber.startsWith('SUMM-') ? (
-                                            <button onClick={() => handleViewPdf(est.estimatePdfPath)} className="rounded-md bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-200">View Summary</button>
+                                            <button onClick={() => handleViewPdf(est.estimatePdf)} className="rounded-md bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-200">View Summary</button>
                                         ) : (
                                             <>
-                                                <button onClick={() => handleViewPdf(est.estimatePdfPath)} className="rounded-md bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200">Estimate PDF</button>
-                                                <button onClick={() => handleViewPdf(est.materialOrderPdfPath)} className="rounded-md bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-200">Materials PDF</button>
+                                                <button onClick={() => handleViewPdf(est.estimatePdf)} className="rounded-md bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200">Estimate PDF</button>
+                                                <button onClick={() => handleViewPdf(est.materialOrderPdf)} className="rounded-md bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-200">Materials PDF</button>
                                             </>
                                         )}
                                         {est.estimateNumber.startsWith('EST-') && est.calcData && (

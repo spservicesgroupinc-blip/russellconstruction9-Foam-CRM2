@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { Job } from './types';
-import TaskItem from './TaskItem';
-import { toDate, addDays, diffInDays, dateLabel } from './utils';
+import { Job } from './types.ts';
+import TaskItem from './TaskItem.tsx';
+import { toDate, addDays, diffInDays, dateLabel } from './utils.ts';
 
 interface GanttChartProps {
   jobs: Job[];
@@ -69,19 +69,19 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
   return (
     <div
-      className="relative bg-white shadow-lg rounded-lg border border-slate-200"
+      className="relative bg-white dark:bg-slate-700 shadow-lg rounded-lg border border-slate-200 dark:border-slate-600"
       style={{ height: jobs.length * ROW_HEIGHT + HEADER_HEIGHT + 20 }}
     >
       {/* Date Header */}
       <div
-        className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200"
+        className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-600/50 border-b border-slate-200 dark:border-slate-600"
         style={{ width: gridWidth, height: HEADER_HEIGHT }}
       >
         <div className="flex">
           {days.map((day) => (
             <div
               key={day.toISOString()} // stable key
-              className="flex-shrink-0 text-center text-xs font-medium text-slate-500 border-r border-slate-200"
+              className="flex-shrink-0 text-center text-xs font-medium text-slate-500 dark:text-slate-300 border-r border-slate-200 dark:border-slate-500"
               style={{ width: pxPerDay }}
             >
               {day.getDate() === 1 ? day.toLocaleDateString('default', { month: 'short' }) : ''}{' '}
@@ -97,7 +97,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         {days.map((day, index) => (
           <div
             key={`col-${day.toISOString()}`}
-            className="absolute top-0 bottom-0 border-r border-slate-100"
+            className="absolute top-0 bottom-0 border-r border-slate-100 dark:border-slate-600"
             style={{ left: index * pxPerDay, width: pxPerDay }}
           />
         ))}
@@ -106,7 +106,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
         {jobs.map((_, index) => (
           <div
             key={`row-${index}`}
-            className="absolute left-0 right-0 border-b border-slate-100"
+            className="absolute left-0 right-0 border-b border-slate-100 dark:border-slate-600"
             style={{ top: (index + 1) * ROW_HEIGHT }}
           />
         ))}
@@ -138,7 +138,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
               markerHeight="6"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" className="dark:fill-slate-400" />
             </marker>
           </defs>
           {jobs.map((job) =>
@@ -169,6 +169,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                   key={`${linkId}-${job.id}`}
                   d={curve}
                   stroke="#64748b"
+                  className="dark:stroke-slate-400"
                   strokeWidth="1.5"
                   fill="none"
                   markerEnd="url(#arrow)"

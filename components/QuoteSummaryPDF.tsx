@@ -1,6 +1,6 @@
 import React from 'react';
-import type { CalculationResults } from './SprayFoamCalculator';
-import type { Costs, CompanyInfo, CustomerInfo } from './EstimatePDF';
+import type { CalculationResults } from './SprayFoamCalculator.tsx';
+import type { Costs, CompanyInfo, CustomerInfo } from './EstimatePDF.tsx';
 
 // Utility functions for formatting
 function fmt(n: number | undefined, digits = 2) {

@@ -1,144 +1,244 @@
-import React from 'react';
-import { CustomerInfo } from './EstimatePDF';
-import { EstimateRecord, JobStatus } from '../lib/db';
-import { getGCSDownloadUrl } from '../lib/gcs';
+import React, { useState, useEffect } from 'react';
+import { EstimateRecord, JobStatus, getTimeEntriesForJob } from '../lib/db.ts';
+import { CustomerInfo } from './EstimatePDF.tsx';
+import { Employee, TimeEntry } from './types.ts';
 
 interface JobDetailProps {
     job: EstimateRecord;
     customers: CustomerInfo[];
+    employees: Employee[];
     onBack: () => void;
-    onUpdateStatus: (jobId: number, status: 'sold' | 'invoiced' | 'paid') => void;
+    onUpdateJob: (jobId: number, updates: Partial<EstimateRecord>) => void;
     onPrepareInvoice: (job: EstimateRecord) => void;
     onScheduleJob: (job: EstimateRecord) => void;
 }
 
-const JobDetail: React.FC<JobDetailProps> = ({ job, customers, onBack, onUpdateStatus, onPrepareInvoice, onScheduleJob }) => {
-    
+const fmt = (n: number, digits = 2) => n.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
+const fmtCurrency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+// Simple markdown renderer for displaying the scope
+const renderScopeForDisplay = (text: string = '') => {
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line)
+    .map((line, index) => {
+      if (line.startsWith('- ')) {
+        return <li key={index} className="ml-4 list-disc">{line.substring(2)}</li>;
+      }
+      if (line.startsWith('**') && line.endsWith('**')) {
+        return <h4 key={index} className="font-semibold mt-2 text-base">{line.substring(2, line.length - 2)}</h4>;
+      }
+      return <p key={index}>{line}</p>;
+    })
+};
+
+
+const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack, onUpdateJob, onPrepareInvoice, onScheduleJob }) => {
     const customer = customers.find(c => c.id === job.customerId);
+    const { calcData, costsData, status } = job;
+    
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const [timeLog, setTimeLog] = useState<TimeEntry[]>([]);
+    const [isLoadingLog, setIsLoadingLog] = useState(true);
+    const [isEditingScope, setIsEditingScope] = useState(false);
+    const [editedScope, setEditedScope] = useState(job.scopeOfWork || '');
 
-    const handleViewPdf = async (filePath: string) => {
-        if (!filePath) {
-            alert("File path is missing.");
-            return;
+    useEffect(() => {
+        if (job.id) {
+            setIsLoadingLog(true);
+            getTimeEntriesForJob(job.id)
+                .then(log => setTimeLog(log.sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())))
+                .catch(console.error)
+                .finally(() => setIsLoadingLog(false));
         }
-        try {
-            const url = await getGCSDownloadUrl(filePath);
-            window.open(url, '_blank');
-        } catch (error) {
-            console.error("Error getting GCS download URL", error);
-            alert("Could not open PDF. Please check the console for details.");
-        }
+        // When the job prop changes, update the local state for the scope editor
+        setEditedScope(job.scopeOfWork || '');
+    }, [job]);
+
+    const handleStatusChange = (newStatus: JobStatus) => {
+        onUpdateJob(job.id!, { status: newStatus });
+        setIsStatusDropdownOpen(false);
     };
     
-    const getStatusDisplay = (status: JobStatus) => {
-        switch (status) {
-            case 'estimate':
-              return <div className="text-blue-700 font-semibold">Status: Estimate</div>;
-            case 'sold':
-              return <div className="text-amber-700 font-semibold">Status: Sold</div>;
-            case 'invoiced':
-              return <div className="text-slate-700 font-semibold">Status: Invoiced</div>;
-            case 'paid':
-              return (
-                  <div className="text-green-700 font-semibold flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Status: Paid in Full
-                  </div>
-              );
-            default:
-              return null;
-        }
+    const handleScopeSave = () => {
+        onUpdateJob(job.id!, { scopeOfWork: editedScope });
+        setIsEditingScope(false);
     };
 
-    const card = "rounded-xl border border-slate-200 bg-white shadow-md";
+    const handleViewPdf = (pdfBlob: Blob) => {
+        const url = URL.createObjectURL(pdfBlob);
+        window.open(url, '_blank');
+    };
+    
+    const getEmployeeName = (employeeId: number) => {
+        return employees.find(e => e.id === employeeId)?.name || `Employee #${employeeId}`;
+    };
 
-    if (!customer || !job) {
+    const totalTrackedHours = timeLog.reduce((sum, entry) => sum + (entry.durationHours || 0), 0);
+
+    const statusMap: Record<JobStatus, { text: string; bg: string; text_color: string; }> = {
+        'estimate': { text: 'Estimate', bg: 'bg-blue-100 dark:bg-blue-900/50', text_color: 'text-blue-800 dark:text-blue-300' },
+        'sold': { text: 'Sold', bg: 'bg-amber-100 dark:bg-amber-900/50', text_color: 'text-amber-800 dark:text-amber-300' },
+        'invoiced': { text: 'Invoiced', bg: 'bg-slate-200 dark:bg-slate-600', text_color: 'text-slate-800 dark:text-slate-200' },
+        'paid': { text: 'Paid', bg: 'bg-green-100 dark:bg-green-900/50', text_color: 'text-green-800 dark:text-green-300' },
+    };
+
+    const card = "rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm p-6";
+    const h2 = "text-lg font-semibold tracking-tight text-slate-800 dark:text-slate-100";
+    const label = "text-sm font-medium text-slate-500 dark:text-slate-400";
+    const value = "text-base font-semibold text-slate-800 dark:text-slate-100";
+
+    if (!calcData || !costsData) {
         return (
             <div className="mx-auto max-w-3xl p-4">
-                <h1 className="text-xl font-bold text-red-600">Job or Customer Not Found</h1>
-                <button onClick={onBack} className="mt-4 text-sm font-medium text-blue-600 hover:underline">
-                    &larr; Back to Jobs List
-                </button>
+                <button onClick={onBack} className="mb-4 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">&larr; Back to Jobs List</button>
+                <div className={`${card} text-center`}>
+                    <h2 className="text-red-600 font-semibold">Error</h2>
+                    <p>This job record is missing calculation or cost data.</p>
+                </div>
             </div>
-        );
+        )
     }
 
     return (
-        <div className="mx-auto max-w-3xl p-4">
-            <button onClick={onBack} className="mb-4 text-sm font-medium text-blue-600 hover:underline">
-                &larr; Back to Jobs List
-            </button>
+         <div className="mx-auto max-w-3xl p-4 space-y-4">
+            <button onClick={onBack} className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">&larr; Back to Jobs List</button>
             
-            <div className={`${card} p-4 mb-4`}>
-                <div className="flex flex-col gap-2">
+            <div className={card}>
+                <div className="flex justify-between items-start">
                     <div>
-                        <h1 className="text-2xl font-bold">{customer.name}</h1>
-                        <p className="text-sm text-slate-600">{job.estimateNumber}</p>
-                        <p className="text-sm text-slate-600">{customer.address}</p>
+                        <h1 className="text-2xl font-bold">{customer?.name || 'Unknown Customer'}</h1>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{job.estimateNumber} &bull; Created {new Date(job.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <div className="text-left pt-2 border-t mt-2">
-                        <p className="text-3xl font-bold text-slate-800">
-                             {job.costsData?.finalQuote.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                        </p>
-                        {getStatusDisplay(job.status)}
-                    </div>
-                </div>
-                <div className="mt-4 pt-4 border-t flex flex-col gap-2">
-                    {(job.status === 'estimate' || job.status === 'sold') && (
-                         <button onClick={() => onScheduleJob(job)} className="w-full rounded-lg bg-slate-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 flex items-center justify-center gap-2">
-                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                             Schedule Job
-                         </button>
-                    )}
-                    {job.status === 'estimate' && (
-                        <button onClick={() => job.id && onUpdateStatus(job.id, 'sold')} className="w-full rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600">
-                            Mark Job as Sold
+                    <div className="relative">
+                        <button onClick={() => setIsStatusDropdownOpen(p => !p)} className={`text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1 ${statusMap[status].bg} ${statusMap[status].text_color}`}>
+                            {statusMap[status].text}
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
                         </button>
-                    )}
-                     {job.status === 'sold' && (
-                        <button onClick={() => onPrepareInvoice(job)} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
-                            Prepare Invoice
-                        </button>
-                    )}
-                     {job.status === 'invoiced' && (
-                        <button onClick={() => job.id && onUpdateStatus(job.id, 'paid')} className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700">
-                            Mark as Paid
-                        </button>
-                    )}
-                </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className={`${card} p-4`}>
-                    <h2 className="text-lg font-semibold tracking-tight">Documents</h2>
-                    <div className="mt-2 space-y-2">
-                         {job.estimateNumber.startsWith('SUMM-') ? (
-                            <button onClick={() => handleViewPdf(job.estimatePdfPath)} className="w-full text-left rounded-md bg-slate-100 p-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">View Quote Summary</button>
-                        ) : (
-                            <>
-                                <button onClick={() => handleViewPdf(job.estimatePdfPath)} className="w-full text-left rounded-md bg-slate-100 p-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">View Estimate PDF</button>
-                                <button onClick={() => handleViewPdf(job.materialOrderPdfPath)} className="w-full text-left rounded-md bg-slate-100 p-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">View Materials PDF</button>
-                            </>
-                        )}
-                    </div>
-                </div>
-                <div className={`${card} p-4`}>
-                    <h2 className="text-lg font-semibold tracking-tight">Contact Info & Notes</h2>
-                    <div className="mt-2 space-y-1 text-sm">
-                        <p><span className="font-semibold">Phone:</span> {customer.phone || 'N/A'}</p>
-                        <p><span className="font-semibold">Email:</span> {customer.email || 'N/A'}</p>
-                        {customer.notes && (
-                            <div className="mt-2 pt-2 border-t">
-                                <p className="font-semibold">Notes:</p>
-                                <p className="text-slate-700 whitespace-pre-wrap">{customer.notes}</p>
+                        {isStatusDropdownOpen && (
+                            <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-slate-700 rounded-md shadow-lg z-10 border border-slate-200 dark:border-slate-600">
+                                {(Object.keys(statusMap) as JobStatus[]).map(s => (
+                                    <button key={s} onClick={() => handleStatusChange(s)} className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600">
+                                        {statusMap[s].text}
+                                    </button>
+                                ))}
                             </div>
                         )}
                     </div>
                 </div>
+                
+                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-600 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <button onClick={() => onScheduleJob(job)} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-semibold shadow-sm hover:bg-blue-700">Schedule Job</button>
+                    <button onClick={() => onPrepareInvoice(job)} className="w-full rounded-lg bg-slate-800 dark:bg-slate-600 px-4 py-2.5 text-white font-medium shadow-sm hover:bg-slate-900 dark:hover:bg-slate-500">Create Invoice</button>
+                    <button onClick={() => handleViewPdf(job.estimatePdf)} className="w-full rounded-lg bg-slate-200 dark:bg-slate-500/50 px-4 py-2.5 text-slate-800 dark:text-slate-100 font-medium shadow-sm hover:bg-slate-300 dark:hover:bg-slate-500">Estimate PDF</button>
+                    <button onClick={() => handleViewPdf(job.materialOrderPdf)} className="w-full rounded-lg bg-slate-200 dark:bg-slate-500/50 px-4 py-2.5 text-slate-800 dark:text-slate-100 font-medium shadow-sm hover:bg-slate-300 dark:hover:bg-slate-500">Materials PDF</button>
+                </div>
             </div>
-        </div>
+
+            <div className={`${card} grid grid-cols-1 md:grid-cols-2 gap-6`}>
+                <div>
+                    <h2 className={h2}>Job Totals</h2>
+                    <div className="mt-3 space-y-2">
+                        <div className="flex justify-between"><span className={label}>Final Quote</span><span className={value}>{fmtCurrency(costsData.finalQuote)}</span></div>
+                        <div className="flex justify-between"><span className={label}>Total Area</span><span className={value}>{fmt(calcData.totalSprayArea, 0)} ft²</span></div>
+                        <div className="flex justify-between"><span className={label}>Total Board Feet</span><span className={value}>{fmt(calcData.totalBoardFeetWithWaste, 0)} bf</span></div>
+                        <div className="flex justify-between pt-2 mt-2 border-t border-slate-200 dark:border-slate-600"><span className={label}>Open-Cell Sets</span><span className={value}>{fmt(calcData.ocSets, 2)}</span></div>
+                        <div className="flex justify-between"><span className={label}>Closed-Cell Sets</span><span className={value}>{fmt(calcData.ccSets, 2)}</span></div>
+                    </div>
+                </div>
+                 <div>
+                    <h2 className={h2}>Cost Breakdown</h2>
+                    <div className="mt-3 space-y-2">
+                        <div className="flex justify-between"><span className={label}>Material Cost</span><span className={value}>{fmtCurrency(costsData.totalMaterialCost)}</span></div>
+                        <div className="flex justify-between"><span className={label}>Labor & Equipment</span><span className={value}>{fmtCurrency(costsData.laborAndEquipmentCost)}</span></div>
+                        <div className="flex justify-between"><span className={label}>Additional Items</span><span className={value}>{fmtCurrency(costsData.additionalCostsTotal)}</span></div>
+                        <div className="flex justify-between pt-2 mt-2 border-t border-slate-200 dark:border-slate-600"><span className={label}>Subtotal</span><span className={value}>{fmtCurrency(costsData.subtotal)}</span></div>
+                        <div className="flex justify-between"><span className={label}>Overhead</span><span className={value}>{fmtCurrency(costsData.overheadValue)}</span></div>
+                        <div className="flex justify-between"><span className={label}>Tax</span><span className={value}>{fmtCurrency(costsData.taxValue)}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div className={card}>
+                <div className="flex justify-between items-center">
+                    <h2 className={h2}>Scope of Work / Description</h2>
+                    {!isEditingScope && (
+                        <button 
+                            onClick={() => setIsEditingScope(true)} 
+                            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                            Edit
+                        </button>
+                    )}
+                </div>
+                <div className="mt-3 text-sm text-slate-700 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-slate-600 pt-3">
+                    {isEditingScope ? (
+                        <>
+                            <textarea
+                                className="w-full h-48 p-2 border rounded-md bg-white dark:bg-slate-600 border-slate-300 dark:border-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                value={editedScope}
+                                onChange={(e) => setEditedScope(e.target.value)}
+                                placeholder="Enter job description or scope details..."
+                            />
+                            <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={() => { setIsEditingScope(false); setEditedScope(job.scopeOfWork || ''); }} className="px-4 py-2 rounded-lg text-sm bg-slate-200 dark:bg-slate-500 hover:bg-slate-300 dark:hover:bg-slate-400">Cancel</button>
+                                <button onClick={handleScopeSave} className="px-4 py-2 rounded-lg text-sm text-white bg-blue-600 hover:bg-blue-700">Save Description</button>
+                            </div>
+                        </>
+                    ) : (
+                        job.scopeOfWork ? renderScopeForDisplay(job.scopeOfWork) : <p className="text-slate-500 dark:text-slate-400 italic">No description provided. Click 'Edit' to add one.</p>
+                    )}
+                </div>
+            </div>
+            
+            <div className={card}>
+                <h2 className={h2}>Time Log</h2>
+                {isLoadingLog ? <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Loading time entries...</p> : (
+                    timeLog.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">No time has been logged for this job yet.</p> : (
+                        <div className="mt-3 flow-root">
+                            <div className="-mx-6 -my-2 overflow-x-auto">
+                                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                                    <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-600">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col" className="py-3.5 pl-6 pr-3 text-left text-sm font-semibold">Employee</th>
+                                                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold">Clock In</th>
+                                                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold">Clock Out</th>
+                                                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold">Duration</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                            {timeLog.map(entry => (
+                                                <tr key={entry.id}>
+                                                    <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm font-medium">{getEmployeeName(entry.employeeId)}</td>
+                                                    <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 dark:text-slate-400">
+                                                        {new Date(entry.startTime).toLocaleString()}
+                                                        {entry.startLat && <a href={`https://www.google.com/maps?q=${entry.startLat},${entry.startLng}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-500 hover:underline text-xs">(Map)</a>}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 dark:text-slate-400">
+                                                        {entry.endTime ? new Date(entry.endTime).toLocaleString() : 'Still Clocked In'}
+                                                        {entry.endLat && <a href={`https://www.google.com/maps?q=${entry.endLat},${entry.endLng}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-500 hover:underline text-xs">(Map)</a>}
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-3 py-4 text-sm font-semibold">{entry.durationHours ? `${entry.durationHours.toFixed(2)} hrs` : '-'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr>
+                                                <td colSpan={3} className="pt-3 text-right font-bold pr-3 border-t-2 border-slate-300 dark:border-slate-500">Total Hours:</td>
+                                                <td className="pt-3 font-bold border-t-2 border-slate-300 dark:border-slate-500">{totalTrackedHours.toFixed(2)} hrs</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )
+                )}
+            </div>
+
+         </div>
     );
 };
 

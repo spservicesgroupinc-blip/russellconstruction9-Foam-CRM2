@@ -2,6 +2,8 @@
   "name": "FOAM CRMAI",
   "description": "A comprehensive tool for spray foam contractors to calculate estimates, manage jobs, and schedule projects on an interactive calendar.",
   "requestFramePermissions": [
-    "camera"
+    "camera",
+    "microphone",
+    "geolocation"
   ]
 }

@@ -1,8 +1,9 @@
 
 
+
 import React, { useMemo } from 'react';
-import { EstimateRecord } from '../lib/db';
-import { CompanyInfo, CustomerInfo } from './EstimatePDF';
+import { EstimateRecord } from '../lib/db.ts';
+import { CompanyInfo, CustomerInfo } from './EstimatePDF.tsx';
 
 interface InvoicingProps {
     soldJobs: EstimateRecord[];
@@ -17,7 +18,7 @@ const Invoicing: React.FC<InvoicingProps> = ({ soldJobs, customers, onPrepareInv
         const pending: EstimateRecord[] = [];
         const invoiced: EstimateRecord[] = [];
         soldJobs.forEach(job => {
-            // Fix: Changed `invoiceStatus` to `status` to match the EstimateRecord type.
+            // FIX: Changed `invoiceStatus` to `status` to match the EstimateRecord type.
             if (job.status === 'invoiced') {
                 invoiced.push(job);
             } else {
@@ -52,7 +53,7 @@ const Invoicing: React.FC<InvoicingProps> = ({ soldJobs, customers, onPrepareInv
                         {job.costsData?.finalQuote.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                     </p>
                 </div>
-                {/* Fix: Changed `invoiceStatus` to `status` to match the EstimateRecord type. */}
+                {/* FIX: Changed `invoiceStatus` to `status` to match the EstimateRecord type. */}
                 {job.status !== 'invoiced' && (
                     <button 
                         onClick={() => onPrepareInvoice(job)} 

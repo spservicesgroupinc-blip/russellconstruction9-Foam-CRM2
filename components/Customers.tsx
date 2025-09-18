@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { CustomerInfo } from './EstimatePDF';
-import { getEstimatesForCustomer } from '../lib/db';
+import { CustomerInfo } from './EstimatePDF.tsx';
+import { getEstimatesForCustomer } from '../lib/db.ts';
+import MapView from './MapView.tsx';
 
 interface CustomersProps {
   customers: CustomerInfo[];
   onAddCustomer: (customer: Omit<CustomerInfo, 'id'>) => void;
   onViewCustomer: (customerId: number) => void;
+  onUpdateCustomer: (customer: CustomerInfo) => void;
 }
 
 const EMPTY_CUSTOMER: Omit<CustomerInfo, 'id'> = {
   name: '', address: '', email: '', phone: ''
 };
 
-const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewCustomer }) => {
+const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewCustomer, onUpdateCustomer }) => {
   const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerActivity, setCustomerActivity] = useState<Record<number, number>>({});
   const [isLoadingActivity, setIsLoadingActivity] = useState(true);
+  const [view, setView] = useState<'list' | 'map'>('list');
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -58,70 +61,102 @@ const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewC
     }
   };
 
-  const card = "rounded-2xl border border-gray-200 bg-white shadow-sm";
+  const card = "rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm";
   const h2 = "text-xl font-semibold tracking-tight";
-  const label = "text-sm font-medium text-gray-700";
-  const input = "mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-black/10";
+  const label = "text-sm font-medium text-slate-700 dark:text-slate-200";
+  const input = "mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600 px-3 py-2 text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500";
+  
+  const ViewToggleButton: React.FC<{target: 'list' | 'map', label: string, icon: JSX.Element}> = ({ target, label, icon }) => {
+    const isActive = view === target;
+    return (
+        <button 
+            onClick={() => setView(target)}
+            className={`flex items-center gap-2 px-3 py-1.5 text-sm font-semibold rounded-md transition-colors ${
+                isActive ? 'bg-blue-600 text-white' : 'text-slate-700 dark:text-slate-200 hover:bg-white/70 dark:hover:bg-slate-500/50'
+            }`}
+        >
+            {icon}
+            {label}
+        </button>
+    );
+  };
 
   return (
     <>
       <div className="mx-auto max-w-4xl p-4 sm:p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Customer Management</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            View your existing client list or add a new customer.
+          <h1 className="text-2xl font-bold dark:text-white">Customer Management</h1>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            View your existing client list or switch to a map view.
           </p>
         </div>
 
-        <div className={`${card} p-4`}>
-          <div className="flex justify-between items-center mb-4">
-              <h2 className={h2}>Customer List</h2>
-              <button 
+        <div className="mb-4 flex justify-between items-center">
+            <div className="flex items-center p-1 bg-slate-200/70 dark:bg-slate-900/50 rounded-lg">
+                <ViewToggleButton 
+                    target="list" 
+                    label="List" 
+                    icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>} 
+                />
+                 <ViewToggleButton 
+                    target="map" 
+                    label="Map" 
+                    icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
+                />
+            </div>
+            <button 
                 onClick={() => setIsModalOpen(true)}
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700"
-              >
-                + Add New Customer
-              </button>
-          </div>
-          
-          <div className="space-y-3">
-            {customers.length === 0 ? (
-              <p className="text-sm text-gray-500 py-4 text-center">No customers added yet.</p>
-            ) : (
-              [...customers].sort((a, b) => a.name.localeCompare(b.name)).map(customer => {
-                const activityCount = customerActivity[customer.id];
-                return (
-                  <div key={customer.id} className="border rounded-lg bg-gray-50/50 hover:bg-blue-50 hover:border-blue-300 transition-colors">
-                      <button onClick={() => onViewCustomer(customer.id)} className="w-full text-left p-3 group">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-grow">
-                            <h3 className="font-semibold group-hover:text-blue-600">{customer.name}</h3>
-                            <p className="text-sm text-gray-600">{customer.address}</p>
-                            <p className="text-sm text-gray-600">{customer.phone}{customer.phone && customer.email && ' | '}{customer.email}</p>
-                          </div>
-                          {!isLoadingActivity && activityCount > 0 && (
-                             <span className="flex-shrink-0 ml-4 mt-1 text-xs font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                               {activityCount} saved file{activityCount > 1 ? 's' : ''}
-                             </span>
-                          )}
-                        </div>
-                      </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
+            >
+                + Add Customer
+            </button>
         </div>
+
+        {view === 'list' ? (
+          <div className={`${card} p-4`}>
+            <div className="space-y-3">
+              {customers.length === 0 ? (
+                <p className="text-sm text-slate-500 dark:text-slate-400 py-4 text-center">No customers added yet.</p>
+              ) : (
+                [...customers].sort((a, b) => a.name.localeCompare(b.name)).map(customer => {
+                  const activityCount = customerActivity[customer.id];
+                  return (
+                    <div key={customer.id} className="border rounded-lg bg-slate-50/50 dark:bg-slate-700/30 dark:border-slate-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-500 transition-colors">
+                        <button onClick={() => onViewCustomer(customer.id)} className="w-full text-left p-3 group">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-grow">
+                              <h3 className="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">{customer.name}</h3>
+                              <p className="text-sm text-slate-600 dark:text-slate-400">{customer.address}</p>
+                              <p className="text-sm text-slate-600 dark:text-slate-400">{customer.phone}{customer.phone && customer.email && ' | '}{customer.email}</p>
+                            </div>
+                            {!isLoadingActivity && activityCount > 0 && (
+                               <span className="flex-shrink-0 ml-4 mt-1 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                                 {activityCount} saved file{activityCount > 1 ? 's' : ''}
+                               </span>
+                            )}
+                          </div>
+                        </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        ) : (
+           <div className={`${card} p-1 overflow-hidden h-[70vh] min-h-[500px]`}>
+              <MapView customers={customers} onUpdateCustomer={onUpdateCustomer} />
+           </div>
+        )}
       </div>
       
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" aria-modal="true" role="dialog">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600" aria-label="Close modal">
+          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
             <form onSubmit={handleSubmit}>
-              <h2 className="text-xl font-bold">Add New Customer</h2>
+              <h2 className="text-xl font-bold dark:text-white">Add New Customer</h2>
               <div className="mt-4 space-y-3">
                 <label className="block"><span className={label}>Full Name</span><input type="text" name="name" value={newCustomer.name} onChange={handleChange} className={input} required /></label>
                 <label className="block"><span className={label}>Address</span><input type="text" name="address" value={newCustomer.address} onChange={handleChange} className={input} required /></label>
@@ -129,7 +164,7 @@ const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewC
                 <label className="block"><span className={label}>Email</span><input type="email" name="email" value={newCustomer.email} onChange={handleChange} className={input} /></label>
               </div>
               <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
                 <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Save Customer</button>
               </div>
             </form>

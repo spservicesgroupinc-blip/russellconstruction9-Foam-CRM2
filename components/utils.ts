@@ -29,6 +29,13 @@ export const diffInDays = (d1: Date | string, d2: Date | string): number => {
 export const minDate = (d1: Date, d2: Date): Date => (d1 < d2 ? d1 : d2);
 export const maxDate = (d1: Date, d2: Date): Date => (d1 > d2 ? d1 : d2);
 
+export const getMidpointDate = (d1: Date, d2: Date): Date => {
+    const t1 = d1.getTime();
+    const t2 = d2.getTime();
+    const midpointTime = t1 + (t2 - t1) / 2;
+    return new Date(midpointTime);
+};
+
 export const fmtInput = (d: Date): string => {
   const year = d.getFullYear();
   const month = (d.getMonth() + 1).toString().padStart(2, '0');

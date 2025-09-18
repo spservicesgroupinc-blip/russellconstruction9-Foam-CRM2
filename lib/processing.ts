@@ -1,5 +1,5 @@
-import type { CalculationResults, CalculatorInputs, FoamType } from '../components/SprayFoamCalculator';
-import type { Costs, CustomerInfo } from '../components/EstimatePDF';
+import type { CalculationResults, CalculatorInputs, FoamType, AdditionalSection } from '../components/SprayFoamCalculator.tsx';
+import type { Costs, CustomerInfo } from '../components/EstimatePDF.tsx';
 
 // --- Helper Functions ---
 
@@ -46,7 +46,8 @@ export function calculateResults(inputs: CalculatorInputs): Omit<CalculationResu
     length, width, wallHeight, pitchInput, includeGableTriangles, 
     wallFoamType, wallThicknessIn, wallWastePct, 
     roofFoamType, roofThicknessIn, roofWastePct, 
-    openCellYield, closedCellYield 
+    openCellYield, closedCellYield,
+    additionalSections
   } = inputs;
 
   const L = Math.max(0, Number(length));
@@ -56,42 +57,63 @@ export function calculateResults(inputs: CalculatorInputs): Omit<CalculationResu
   const pitchValid = risePer12 !== null && isFinite(risePer12) && risePer12 >= 0;
   const perimeter = 2 * (L + W);
   const wallRectArea = perimeter * H;
+
   let gableAdd = 0;
   if (pitchValid && includeGableTriangles) {
     const riseCenter = (W / 2) * risePer12!;
     gableAdd = W * riseCenter;
   }
-  const wallTotal = wallRectArea + gableAdd;
+  
+  const additionalWallArea = (additionalSections || [])
+    .filter(s => s.type === 'walls')
+    .reduce((sum, s) => sum + (Number(s.length) * Number(s.width)), 0);
+
+  const wallTotal = wallRectArea + gableAdd + additionalWallArea;
+
   const slopeFactor = pitchValid ? Math.sqrt(1 + risePer12! * risePer12!) : NaN;
-  const roofArea = pitchValid ? L * W * slopeFactor : NaN;
-  const totalSprayArea = pitchValid ? wallTotal + roofArea : NaN;
+  const mainBuildingRoofArea = pitchValid ? L * W * slopeFactor : 0;
+  
+  const additionalRoofArea = (additionalSections || [])
+    .filter(s => s.type === 'roof')
+    .reduce((sum, s) => sum + (Number(s.length) * Number(s.width)), 0);
+    
+  const roofArea = mainBuildingRoofArea + additionalRoofArea;
+  const totalSprayArea = wallTotal + roofArea;
+
   const wThick = clamp(Number(wallThicknessIn), 0, 1000);
   const wWaste = clamp(Number(wallWastePct), 0, 100);
   const rThick = clamp(Number(roofThicknessIn), 0, 1000);
   const rWaste = clamp(Number(roofWastePct), 0, 100);
+
   const wallBoardFeetBase = wallTotal * wThick;
-  const roofBoardFeetBase = isFinite(roofArea) ? roofArea * rThick : NaN;
-  const totalBoardFeetBase = isFinite(wallBoardFeetBase) && isFinite(roofBoardFeetBase) ? wallBoardFeetBase + roofBoardFeetBase : NaN;
+  const roofBoardFeetBase = roofArea * rThick;
+  const totalBoardFeetBase = wallBoardFeetBase + roofBoardFeetBase;
+
   const wallBoardFeetWithWaste = wallBoardFeetBase * (1 + wWaste / 100);
-  const roofBoardFeetWithWaste = isFinite(roofBoardFeetBase) ? roofBoardFeetBase * (1 + rWaste / 100) : NaN;
-  const totalBoardFeetWithWaste = isFinite(wallBoardFeetWithWaste) && isFinite(roofBoardFeetWithWaste) ? wallBoardFeetWithWaste + roofBoardFeetWithWaste : NaN;
+  const roofBoardFeetWithWaste = roofBoardFeetBase * (1 + rWaste / 100);
+  const totalBoardFeetWithWaste = wallBoardFeetWithWaste + roofBoardFeetWithWaste;
+
   let totalOpenCellBoardFeet = 0;
   let totalClosedCellBoardFeet = 0;
-  if (isFinite(wallBoardFeetWithWaste)) {
-      if (wallFoamType === 'open-cell') totalOpenCellBoardFeet += wallBoardFeetWithWaste;
-      else totalClosedCellBoardFeet += wallBoardFeetWithWaste;
+
+  if (wallFoamType === 'open-cell') {
+      totalOpenCellBoardFeet += wallBoardFeetWithWaste;
+  } else {
+      totalClosedCellBoardFeet += wallBoardFeetWithWaste;
   }
-  if (isFinite(roofBoardFeetWithWaste)) {
-      if (roofFoamType === 'open-cell') totalOpenCellBoardFeet += roofBoardFeetWithWaste;
-      else totalClosedCellBoardFeet += roofBoardFeetWithWaste;
+  if (roofFoamType === 'open-cell') {
+      totalOpenCellBoardFeet += roofBoardFeetWithWaste;
+  } else {
+      totalClosedCellBoardFeet += roofBoardFeetWithWaste;
   }
+  
   const ocYield = Math.max(1, Number(openCellYield));
   const ccYield = Math.max(1, Number(closedCellYield));
   const ocSets = isFinite(totalOpenCellBoardFeet) ? totalOpenCellBoardFeet / ocYield : NaN;
   const ccSets = isFinite(totalClosedCellBoardFeet) ? totalClosedCellBoardFeet / ccYield : NaN;
 
   return {
-    pitchValid, risePer12: risePer12 ?? NaN, slopeFactor: slopeFactor ?? NaN, perimeter,
+    pitchValid, risePer12: risePer12 ?? NaN, slopeFactor: slopeFactor, perimeter,
     wallRectArea, gableAdd, wallTotal, roofArea, totalSprayArea, totalBoardFeetBase,
     wallBoardFeetWithWaste, roofBoardFeetWithWaste, totalBoardFeetWithWaste, wallFoamType,
     roofFoamType, wallThicknessIn: wThick, roofThicknessIn: rThick, ocSets, ccSets,

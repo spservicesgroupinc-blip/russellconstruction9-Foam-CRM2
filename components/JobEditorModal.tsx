@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { EditingJob, Job } from './types';
-import { fmtInput, toDate, addDays } from './utils';
+import { EditingJob, Job } from './types.ts';
+import { fmtInput, toDate, addDays } from './utils.ts';
 
 interface JobEditorModalProps {
   job: EditingJob;
@@ -55,21 +55,21 @@ const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, o
   
   const otherJobs = allJobs.filter(j => j.id !== job.id);
   const card = "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4";
-  const label = "text-sm font-medium text-slate-600";
-  const input = "mt-1 w-full rounded-lg border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const label = "text-sm font-medium text-slate-600 dark:text-slate-300";
+  const input = "mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600 px-3 py-2 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white";
   const button = "rounded-lg px-4 py-2 text-sm font-medium transition-colors";
   const primaryButton = `${button} bg-blue-600 text-white shadow hover:bg-blue-700`;
-  const secondaryButton = `${button} text-slate-700 hover:bg-slate-100`;
+  const secondaryButton = `${button} text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700`;
   const dangerButton = `${button} bg-red-500 text-white shadow hover:bg-red-600`;
   
   return (
     <div className={card} onClick={onCancel} aria-modal="true" role="dialog">
-      <div className="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-        <button onClick={onCancel} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600" aria-label="Close modal">
+      <div className="relative w-full max-w-lg rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+        <button onClick={onCancel} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
         <form onSubmit={handleSave}>
-          <h2 className="text-xl font-bold text-slate-800">Edit Job</h2>
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Edit Job</h2>
           <div className="mt-4 space-y-4">
             <label className="block">
                 <span className={label}>Job Name</span>
@@ -94,7 +94,7 @@ const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, o
                 <select name="links" multiple value={editedJob.links} onChange={handleChange} className={`${input} h-32`}>
                     {otherJobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
                 </select>
-                <button type="button" onClick={() => onMakeStandalone(job.id)} className="text-xs text-blue-600 hover:underline mt-1">Unlink All</button>
+                <button type="button" onClick={() => onMakeStandalone(job.id)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1">Unlink All</button>
             </label>
           </div>
           <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-between gap-2">

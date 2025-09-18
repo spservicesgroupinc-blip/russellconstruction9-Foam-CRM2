@@ -1,7 +1,5 @@
-
-
 import React from 'react';
-import type { CalculationResults } from './SprayFoamCalculator';
+import type { CalculationResults } from './SprayFoamCalculator.tsx';
 
 // Utility functions for formatting, kept local to this component
 function fmt(n: number | undefined, digits = 2) {
@@ -29,6 +27,8 @@ export interface CustomerInfo {
   email: string;
   phone: string;
   notes?: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface LineItem {

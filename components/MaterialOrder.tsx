@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { EstimateRecord } from '../lib/db';
+import { EstimateRecord } from '../lib/db.ts';
 
 export interface OnHandInventory {
     ocSets: number;
