@@ -60,6 +60,12 @@ const MorePage: React.FC<MorePageProps> = ({ onNavigate }) => {
             title="Materials"
             description="Track on-hand inventory and see what to order."
           />
+           <ListItem
+            page="inventory"
+            icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
+            title="Inventory"
+            description="Manage stock levels of foam, equipment, and supplies."
+          />
           <ListItem
             page="gantt"
             icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>}

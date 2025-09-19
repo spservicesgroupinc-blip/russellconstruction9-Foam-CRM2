@@ -15,6 +15,10 @@ const TimeClockPage: React.FC<TimeClockPageProps> = ({ employees, jobs }) => {
     const [activeEntries, setActiveEntries] = useState<Record<number, TimeEntry>>({});
     const [jobToClockIn, setJobToClockIn] = useState<number | ''>('');
 
+    // Filter jobs to only include those available for time tracking.
+    // A job is available if it's 'sold' but not yet 'invoiced' or 'paid'.
+    const availableJobs = jobs.filter(j => j.status === 'sold');
+
     // Fetch active time entries for all employees on mount
     useEffect(() => {
         const fetchAllActiveEntries = async () => {
@@ -193,7 +197,7 @@ const TimeClockPage: React.FC<TimeClockPageProps> = ({ employees, jobs }) => {
                          <label className="block mt-4"><span className={label}>Select Job</span>
                             <select value={jobToClockIn} onChange={e => setJobToClockIn(Number(e.target.value))} className={`${input} appearance-none`}>
                                 <option value="">-- Select --</option>
-                                {jobs.map(j => <option key={j.id} value={j.id}>{j.estimateNumber} - {j.calcData.customer?.name}</option>)}
+                                {availableJobs.map(j => <option key={j.id} value={j.id}>{j.estimateNumber} - {j.calcData.customer?.name}</option>)}
                             </select>
                         </label>
                         <div className="mt-6 flex justify-end gap-2">

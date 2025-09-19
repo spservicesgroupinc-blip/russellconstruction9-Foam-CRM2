@@ -52,16 +52,22 @@ const QuoteSummaryPDF: React.FC<QuoteSummaryPDFProps> = ({ calc, costs, companyI
           <h3 className="text-xl font-semibold text-slate-800 mb-2">Cost Breakdown</h3>
           <div className="w-full text-sm border-t border-slate-200">
             <div className="flex justify-between py-3 border-b border-slate-200">
-                <span>Material Cost</span>
+                <span>Foam Material Cost</span>
                 <span className="font-medium">{fmtCurrency(costs.totalMaterialCost)}</span>
             </div>
+             {costs.totalInventoryCost > 0 && (
+                <div className="flex justify-between py-3 border-b border-slate-200">
+                    <span>Additional Materials</span>
+                    <span className="font-medium">{fmtCurrency(costs.totalInventoryCost)}</span>
+                </div>
+            )}
             <div className="flex justify-between py-3 border-b border-slate-200">
                 <span>Labor & Equipment</span>
                 <span className="font-medium">{fmtCurrency(costs.laborAndEquipmentCost)}</span>
             </div>
              {costs.additionalCostsTotal > 0 && (
                 <div className="flex justify-between py-3 border-b border-slate-200">
-                    <span>Additional Costs</span>
+                    <span>Other Line Items</span>
                     <span className="font-medium">{fmtCurrency(costs.additionalCostsTotal)}</span>
                 </div>
             )}

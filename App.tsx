@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import SprayFoamCalculator, { CalculationResults, CalculatorInputs } from './components/SprayFoamCalculator.tsx';
+import SprayFoamCalculator, { CalculationResults, CalculatorInputs, InventoryLineItem } from './components/SprayFoamCalculator.tsx';
 import JobCosting from './components/JobCosting.tsx';
 import Settings from './components/Settings.tsx';
 import Customers from './components/Customers.tsx';
@@ -16,12 +16,13 @@ import GanttPage from './components/GanttPage.tsx';
 import TeamPage from './components/TeamPage.tsx';
 import MorePage from './components/MorePage.tsx';
 import TimeClockPage from './components/TimeClockPage.tsx';
+import InventoryPage from './components/InventoryPage.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
-import { db, EstimateRecord, JobStatus } from './lib/db.ts';
+import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
 import { Job, Employee } from './components/types.ts';
 
-export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock';
+export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -40,6 +41,7 @@ const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   roofFoamType: 'open-cell', roofThicknessIn: 7.5, roofWastePct: 15,
   openCellYield: 16000, closedCellYield: 4000,
   additionalSections: [],
+  inventoryLineItems: [],
 };
 
 const CALENDAR_STORAGE_KEY = 'jobCalendarJobs';
@@ -73,6 +75,7 @@ const App: React.FC = () => {
   const [customers, setCustomers] = useState<CustomerInfo[]>([]);
   const [jobs, setJobs] = useState<EstimateRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [calculatorInputs, setCalculatorInputs] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [calculationResults, setCalculationResults] = useState<CalculationResults | null>(null);
@@ -155,6 +158,8 @@ const App: React.FC = () => {
     setJobs(allJobs);
     const allEmployees = await db.employees.toArray();
     setEmployees(allEmployees);
+    const allItems = await db.inventory.toArray();
+    setInventoryItems(allItems);
   }, []);
 
 
@@ -254,6 +259,24 @@ const App: React.FC = () => {
       setPage('schedule');
   }
 
+  // Inventory Handlers
+  const handleAddInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
+    const newId = await db.inventory.add(item as InventoryItem);
+    const newItem = { ...item, id: newId };
+    setInventoryItems(prev => [...prev, newItem].sort((a,b) => a.name.localeCompare(b.name)));
+  };
+
+  const handleUpdateInventoryItem = async (item: InventoryItem) => {
+    await db.inventory.put(item);
+    setInventoryItems(prev => prev.map(i => i.id === item.id ? item : i));
+  };
+
+  const handleDeleteInventoryItem = async (itemId: number) => {
+    await db.inventory.delete(itemId);
+    setInventoryItems(prev => prev.filter(i => i.id !== itemId));
+  };
+
+
   const resetCurrentJob = () => {
     setCurrentJob(null);
     setCalculationResults(null);
@@ -279,7 +302,7 @@ const App: React.FC = () => {
     if (['calculator', 'costing'].includes(currentPage)) return 'calculator';
     if (['schedule'].includes(currentPage)) return 'schedule';
     if (['timeclock'].includes(currentPage)) return 'timeclock';
-    if (['more', 'jobsList', 'jobDetail', 'invoicing', 'team', 'settings', 'materialOrder', 'gantt'].includes(currentPage)) return 'more';
+    if (['more', 'jobsList', 'jobDetail', 'invoicing', 'team', 'settings', 'materialOrder', 'gantt', 'inventory'].includes(currentPage)) return 'more';
     return 'dashboard'; // fallback
   }
   const activeTab = getActiveTab(page);
@@ -305,8 +328,8 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (page) {
       case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} />;
-      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} onAddCustomer={handleAddCustomer} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} />;
-      case 'costing': return calculationResults && <JobCosting calculationResults={calculationResults} onBack={() => setPage('calculator')} companyInfo={companyInfo!} onEstimateCreated={handleEstimateCreated} defaultCosts={appSettings.defaultCosts} />;
+      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} onAddCustomer={handleAddCustomer} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} />;
+      case 'costing': return calculationResults && <JobCosting calculationResults={calculationResults} onBack={() => setPage('calculator')} companyInfo={companyInfo!} onEstimateCreated={handleEstimateCreated} defaultCosts={appSettings.defaultCosts} inventoryItems={inventoryItems} />;
       case 'customers': return <Customers customers={customers} onAddCustomer={handleAddCustomer} onViewCustomer={(id) => { setSelectedCustomerId(id); setPage('customerDetail'); }} onUpdateCustomer={handleUpdateCustomer} />;
       case 'customerDetail': return <CustomerDetail customerId={selectedCustomerId as number} customers={customers} onBack={() => setPage('customers')} onJobSold={(est) => { handleUpdateJob(est.id!, { status: 'sold' }); handleJobSold(est); }} />;
       case 'jobsList': return <JobsList jobs={jobs} customers={customers} onViewJob={handleViewJob} onDeleteJob={handleDeleteJob} filter={filter} setFilter={setFilter} />;
@@ -317,7 +340,8 @@ const App: React.FC = () => {
       case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} />;
       case 'map': return <MapView customers={customers} onUpdateCustomer={handleUpdateCustomer} />;
       case 'team': return <TeamPage employees={employees} onAddEmployee={handleAddEmployee} jobs={jobs.filter(j => j.status === 'sold')} />;
-      case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs.filter(j => j.status === 'sold')} />;
+      case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} />;
+      case 'inventory': return <InventoryPage items={inventoryItems} onAddItem={handleAddInventoryItem} onUpdateItem={handleUpdateInventoryItem} onDeleteItem={handleDeleteInventoryItem} />;
       case 'settings': return <Settings onSave={handleSaveSettings} currentInfo={companyInfo} appSettings={appSettings} />;
       case 'more': return <MorePage onNavigate={setPage} />;
       default: return <div>Page not found</div>;

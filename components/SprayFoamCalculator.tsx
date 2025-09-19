@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { CustomerInfo } from './EstimatePDF.tsx';
 import { calculateResults } from '../lib/processing.ts';
+import { InventoryItem } from '../lib/db.ts';
 
 export type FoamType = 'open-cell' | 'closed-cell';
 
@@ -9,6 +10,12 @@ export interface AdditionalSection {
   length: number;
   width: number;
   type: 'walls' | 'roof';
+}
+
+export interface InventoryLineItem {
+  id: number; // Unique ID for the line in the list, not the inventory item id
+  itemId: number | '';
+  quantity: number;
 }
 
 export interface CalculationResults {
@@ -33,6 +40,7 @@ export interface CalculationResults {
   ccSets: number;
   totalOpenCellBoardFeet: number;
   totalClosedCellBoardFeet: number;
+  inventoryLineItems: InventoryLineItem[];
   customer?: CustomerInfo;
 }
 
@@ -52,6 +60,7 @@ export interface CalculatorInputs {
   openCellYield: number;
   closedCellYield: number;
   additionalSections: AdditionalSection[];
+  inventoryLineItems: InventoryLineItem[];
 }
 
 function fmt(n: number, digits = 2) {
@@ -69,6 +78,7 @@ interface SprayFoamCalculatorProps {
   calculatorInputs: CalculatorInputs;
   setCalculatorInputs: React.Dispatch<React.SetStateAction<CalculatorInputs>>;
   defaultYields: { openCellYield: number, closedCellYield: number };
+  inventoryItems: InventoryItem[];
 }
 
 const EMPTY_CUSTOMER_FORM: Omit<CustomerInfo, 'id'> = { name: '', address: '', email: '', phone: '', notes: '' };
@@ -82,6 +92,7 @@ export default function SprayFoamCalculator({
   calculatorInputs,
   setCalculatorInputs,
   defaultYields,
+  inventoryItems
 }: SprayFoamCalculatorProps) {
 
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
@@ -100,7 +111,7 @@ export default function SprayFoamCalculator({
     length, width, wallHeight, pitchInput
   } = calculatorInputs;
 
-  const handleInputChange = (field: keyof Omit<CalculatorInputs, 'additionalSections'>, value: any) => {
+  const handleInputChange = (field: keyof Omit<CalculatorInputs, 'additionalSections' | 'inventoryLineItems'>, value: any) => {
     const numericFields: (keyof CalculatorInputs)[] = [
       'length', 'width', 'wallHeight', 'wallThicknessIn', 'wallWastePct',
       'roofThicknessIn', 'roofWastePct', 'openCellYield', 'closedCellYield'
@@ -134,6 +145,33 @@ export default function SprayFoamCalculator({
         additionalSections: prev.additionalSections.map(s => 
             s.id === id ? { ...s, [field]: (field === 'length' || field === 'width') ? parseFloat(value as string) || 0 : value } : s
         )
+    }));
+  };
+
+  // --- Inventory Line Item Handlers ---
+  const handleAddInventoryLineItem = () => {
+    setCalculatorInputs(prev => ({
+      ...prev,
+      inventoryLineItems: [
+        ...prev.inventoryLineItems,
+        { id: Date.now(), itemId: '', quantity: 1 }
+      ]
+    }));
+  };
+
+  const handleRemoveInventoryLineItem = (id: number) => {
+    setCalculatorInputs(prev => ({
+      ...prev,
+      inventoryLineItems: prev.inventoryLineItems.filter(item => item.id !== id)
+    }));
+  };
+
+  const handleInventoryLineItemChange = (id: number, field: keyof Omit<InventoryLineItem, 'id'>, value: string | number) => {
+    setCalculatorInputs(prev => ({
+      ...prev,
+      inventoryLineItems: prev.inventoryLineItems.map(item =>
+        item.id === id ? { ...item, [field]: typeof value === 'string' ? (field === 'itemId' ? parseInt(value) : value) : value } : item
+      )
     }));
   };
 
@@ -286,6 +324,50 @@ export default function SprayFoamCalculator({
               ))}
           </div>
           <button onClick={handleAddSection} className="mt-3 rounded-lg bg-slate-100 dark:bg-slate-600 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-500">+ Add Area</button>
+      </div>
+      
+      <div className={`${card} p-6`}>
+        <h2 className={h2}>Additional Materials & Supplies</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Add items from your inventory to this estimate.</p>
+        <div className="mt-4 space-y-3">
+          {calculatorInputs.inventoryLineItems.map(lineItem => {
+            const selectedItem = inventoryItems.find(i => i.id === lineItem.itemId);
+            const onHandQty = selectedItem ? selectedItem.quantity : 0;
+            const isOver = lineItem.quantity > onHandQty;
+            return (
+              <div key={lineItem.id} className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 sm:gap-2 items-end p-3 rounded-lg border bg-slate-50 dark:bg-slate-600/30 border-slate-200 dark:border-slate-500">
+                <label className="block">
+                  <span className={label}>Material</span>
+                  <select
+                    value={lineItem.itemId}
+                    onChange={e => handleInventoryLineItemChange(lineItem.id, 'itemId', e.target.value)}
+                    className={select}
+                  >
+                    <option value="">-- Select Item --</option>
+                    {inventoryItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                   <span className={label}>Quantity Needed</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={lineItem.quantity}
+                    onChange={e => handleInventoryLineItemChange(lineItem.id, 'quantity', parseFloat(e.target.value) || 0)}
+                    className={input}
+                  />
+                   {selectedItem && (
+                    <span className={`text-xs ml-1 ${isOver ? 'text-red-500 font-semibold' : 'text-slate-500 dark:text-slate-400'}`}>
+                      On Hand: {onHandQty}
+                    </span>
+                  )}
+                </label>
+                <button onClick={() => handleRemoveInventoryLineItem(lineItem.id)} className="w-full sm:w-auto h-11 flex-shrink-0 flex items-center justify-center rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60 px-3 font-mono font-bold text-lg" aria-label="Remove Item">-</button>
+              </div>
+            )
+          })}
+        </div>
+        <button onClick={handleAddInventoryLineItem} className="mt-3 rounded-lg bg-slate-100 dark:bg-slate-600 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-500">+ Add Material</button>
       </div>
 
       <div className={`${card} p-6`}>

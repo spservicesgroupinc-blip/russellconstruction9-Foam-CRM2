@@ -20,26 +20,36 @@ export interface EstimateRecord {
   createdAt: string; // ISO string
 }
 
+export interface InventoryItem {
+  id?: number;
+  name: string;
+  category: string;
+  quantity: number;
+  unitCost?: number;
+  notes?: string;
+}
+
 export class AppDatabase extends Dexie {
   customers!: Table<CustomerInfo, number>;
   estimates!: Table<EstimateRecord, number>;
   employees!: Table<Employee, number>;
   time_log!: Table<TimeEntry, number>;
+  inventory!: Table<InventoryItem, number>;
 
   constructor() {
     super('foamCrmDatabase');
+    // FIX: Moved schema definition inside the constructor. This is the standard Dexie pattern and resolves the TypeScript error.
+    this.version(3).stores({
+      customers: '++id, name, address',
+      estimates: '++id, customerId, estimateNumber, status, createdAt',
+      employees: '++id, name',
+      time_log: '++id, employeeId, jobId, startTime, endTime, startLat, startLng, endLat, endLng, durationHours',
+      inventory: '++id, name, category',
+    });
   }
 }
 
 export const db = new AppDatabase();
-
-// FIX: Moved schema definition out of the constructor to resolve a TypeScript type error where 'version' was not found on 'this'. This is an alternative, valid Dexie pattern.
-db.version(2).stores({
-  customers: '++id, name, address',
-  estimates: '++id, customerId, estimateNumber, status, createdAt',
-  employees: '++id, name',
-  time_log: '++id, employeeId, jobId, startTime, endTime, startLat, startLng, endLat, endLng, durationHours'
-});
 
 // --- DB Helper Functions ---
 

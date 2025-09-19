@@ -1,5 +1,6 @@
-import type { CalculationResults, CalculatorInputs, FoamType, AdditionalSection } from '../components/SprayFoamCalculator.tsx';
+import type { CalculationResults, CalculatorInputs, FoamType, AdditionalSection, InventoryLineItem } from '../components/SprayFoamCalculator.tsx';
 import type { Costs, CustomerInfo } from '../components/EstimatePDF.tsx';
+import { InventoryItem } from './db.ts';
 
 // --- Helper Functions ---
 
@@ -47,7 +48,7 @@ export function calculateResults(inputs: CalculatorInputs): Omit<CalculationResu
     wallFoamType, wallThicknessIn, wallWastePct, 
     roofFoamType, roofThicknessIn, roofWastePct, 
     openCellYield, closedCellYield,
-    additionalSections
+    additionalSections, inventoryLineItems
   } = inputs;
 
   const L = Math.max(0, Number(length));
@@ -117,7 +118,7 @@ export function calculateResults(inputs: CalculatorInputs): Omit<CalculationResu
     wallRectArea, gableAdd, wallTotal, roofArea, totalSprayArea, totalBoardFeetBase,
     wallBoardFeetWithWaste, roofBoardFeetWithWaste, totalBoardFeetWithWaste, wallFoamType,
     roofFoamType, wallThicknessIn: wThick, roofThicknessIn: rThick, ocSets, ccSets,
-    totalOpenCellBoardFeet, totalClosedCellBoardFeet,
+    totalOpenCellBoardFeet, totalClosedCellBoardFeet, inventoryLineItems,
   };
 }
 
@@ -150,7 +151,8 @@ export const DEFAULT_COST_SETTINGS: CostSettings = {
 export function calculateCosts(
   calc: Omit<CalculationResults, 'customer'>, 
   settings: CostSettings, 
-  lineItems: { id: number, description: string, cost: number }[] = []
+  lineItems: { id: number, description: string, cost: number }[] = [],
+  inventoryItems: InventoryItem[]
 ): Costs {
   const {
     ocCostPerSet, ocMarkup, ccCostPerSet, ccMarkup,
@@ -173,7 +175,18 @@ export function calculateCosts(
 
   const additionalCostsTotal = lineItems.reduce((sum, item) => sum + (Number(item.cost) || 0), 0);
 
-  const subtotal = totalMaterialCost + laborAndEquipmentCost + additionalCostsTotal;
+  const inventoryCostBreakdown = (calc.inventoryLineItems || [])
+    .map(line => {
+        const item = inventoryItems.find(i => i.id === line.itemId);
+        if (!item) return null;
+        const lineTotal = (item.unitCost || 0) * line.quantity;
+        return { ...line, name: item.name, unitCost: item.unitCost || 0, lineTotal };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  const totalInventoryCost = inventoryCostBreakdown.reduce((sum, item) => sum + item.lineTotal, 0);
+
+  const subtotal = totalMaterialCost + laborAndEquipmentCost + additionalCostsTotal + totalInventoryCost;
   const overheadValue = subtotal * ((Number(overheadPercentage) || 0) / 100);
   const preTaxTotal = subtotal + overheadValue;
   const taxValue = preTaxTotal * ((Number(salesTax) || 0) / 100);
@@ -183,6 +196,8 @@ export function calculateCosts(
     ocSets: calc.ocSets, ocCostPerSet, ocMarkup, ocTotal,
     ccSets: calc.ccSets, ccCostPerSet, ccMarkup, ccTotal,
     totalMaterialCost, laborRate, laborHours, equipmentFee, laborAndEquipmentCost,
-    lineItems, additionalCostsTotal, subtotal, overheadValue, preTaxTotal, taxValue, finalQuote,
+    lineItems, additionalCostsTotal,
+    inventoryCostBreakdown, totalInventoryCost,
+    subtotal, overheadValue, preTaxTotal, taxValue, finalQuote,
   };
 }

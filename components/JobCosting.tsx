@@ -5,7 +5,7 @@ import MaterialOrderPDF from './MaterialOrderPDF.tsx';
 import QuoteSummaryPDF from './QuoteSummaryPDF.tsx';
 import InvoicePDF from './InvoicePDF.tsx';
 import { GoogleGenAI } from '@google/genai';
-import { saveEstimate, EstimateRecord, getTimeEntriesForJob } from '../lib/db.ts';
+import { saveEstimate, EstimateRecord, getTimeEntriesForJob, InventoryItem } from '../lib/db.ts';
 import { calculateCosts, CostSettings } from '../lib/processing.ts';
 
 // Add declarations for jspdf and html2canvas
@@ -26,6 +26,7 @@ interface JobCostingProps {
   onFinalizeInvoice?: (finalJobData: EstimateRecord) => void;
   onEstimateCreated?: (newJob: EstimateRecord) => void;
   defaultCosts: CostSettings;
+  inventoryItems: InventoryItem[];
 }
 
 function fmt(n: number, digits = 2) {
@@ -99,7 +100,8 @@ export default function JobCosting({
   initialJobData,
   onFinalizeInvoice,
   onEstimateCreated,
-  defaultCosts
+  defaultCosts,
+  inventoryItems
 }: JobCostingProps) {
   // Cost settings state, initialized with defaults from props
   const [costSettings, setCostSettings] = useState<CostSettings>(defaultCosts);
@@ -169,8 +171,8 @@ export default function JobCosting({
 
 
   const costs: Costs = useMemo(() => {
-    return calculateCosts(calc, costSettings, lineItems);
-  }, [calc, costSettings, lineItems]);
+    return calculateCosts(calc, costSettings, lineItems, inventoryItems);
+  }, [calc, costSettings, lineItems, inventoryItems]);
 
   const handleCostSettingChange = (field: keyof CostSettings, value: number) => {
     setCostSettings(prev => ({ ...prev, [field]: value }));
@@ -576,14 +578,35 @@ export default function JobCosting({
                     <div className="flex items-end"><div className="w-full rounded-md bg-slate-100 dark:bg-slate-600 px-3 py-2 text-right"><span className="font-semibold">{fmtCurrency(costs.ccTotal)}</span></div></div>
                   </div>
                 )}
-                <div className="border-t border-slate-200 dark:border-slate-600 pt-3 mt-3 flex justify-between text-base font-bold"><span>Total Material Cost</span><span>{fmtCurrency(costs.totalMaterialCost)}</span></div>
+                <div className="border-t border-slate-200 dark:border-slate-600 pt-3 mt-3 flex justify-between text-base font-bold"><span>Total Foam Cost</span><span>{fmtCurrency(costs.totalMaterialCost)}</span></div>
               </div>
             </div>
+
+            {costs.inventoryCostBreakdown.length > 0 && (
+              <div className={`${card} p-6`}>
+                <h2 className={h2}>2. Inventory Materials</h2>
+                <div className="mt-4 space-y-2">
+                  {costs.inventoryCostBreakdown.map(item => (
+                    <div key={item.itemId} className="flex justify-between items-center text-sm p-2 rounded-md bg-slate-50 dark:bg-slate-600/50">
+                      <div>
+                        <span className="font-semibold">{item.name}</span>
+                        <span className="text-slate-500 dark:text-slate-400 ml-2">({item.quantity} @ {fmtCurrency(item.unitCost)})</span>
+                      </div>
+                      <span className="font-semibold">{fmtCurrency(item.lineTotal)}</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-slate-200 dark:border-slate-600 pt-3 mt-3 flex justify-between text-base font-bold">
+                    <span>Total Inventory Cost</span>
+                    <span>{fmtCurrency(costs.totalInventoryCost)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
             
-            <div className={`${card} p-6`}><h2 className={h2}>2. Labor & Equipment</h2><div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3"><label className="block"><span className={label}>Labor Rate ($/hr)</span><input type="number" min={0} className={input} value={costSettings.laborRate} onChange={e => handleCostSettingChange('laborRate', parseFloat(e.target.value))} /></label><label className="block"><span className={label}>Total Hours</span><input type="number" min={0} className={input} value={costSettings.laborHours} onChange={e => handleCostSettingChange('laborHours', parseFloat(e.target.value))} /></label><label className="block"><span className={label}>Equipment Fee ($)</span><input type="number" min={0} className={input} value={costSettings.equipmentFee} onChange={e => handleCostSettingChange('equipmentFee', parseFloat(e.target.value))} /></label></div></div>
+            <div className={`${card} p-6`}><h2 className={h2}>3. Labor & Equipment</h2><div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3"><label className="block"><span className={label}>Labor Rate ($/hr)</span><input type="number" min={0} className={input} value={costSettings.laborRate} onChange={e => handleCostSettingChange('laborRate', parseFloat(e.target.value))} /></label><label className="block"><span className={label}>Total Hours</span><input type="number" min={0} className={input} value={costSettings.laborHours} onChange={e => handleCostSettingChange('laborHours', parseFloat(e.target.value))} /></label><label className="block"><span className={label}>Equipment Fee ($)</span><input type="number" min={0} className={input} value={costSettings.equipmentFee} onChange={e => handleCostSettingChange('equipmentFee', parseFloat(e.target.value))} /></label></div></div>
 
             <div className={`${card} p-6`}>
-              <h2 className={h2}>3. Additional Line Items</h2>
+              <h2 className={h2}>4. Additional Line Items</h2>
               <div className="mt-4 space-y-3">
                 {lineItems.map((item, index) => (
                   <div key={item.id} className="flex flex-col sm:flex-row gap-2">
@@ -597,9 +620,10 @@ export default function JobCosting({
           </div>
 
           <div className={`${card} p-6 flex flex-col bg-slate-50 dark:bg-slate-700/50 lg:col-span-1`}>
-            <h2 className={h2}>4. {isInvoiceMode ? 'Invoice' : 'Quote'} Summary</h2>
+            <h2 className={h2}>5. {isInvoiceMode ? 'Invoice' : 'Quote'} Summary</h2>
             <div className="mt-4 flex-grow space-y-2 text-sm">
-              <div className="flex justify-between"><span>Material Cost</span><span className="font-medium">{fmtCurrency(costs.totalMaterialCost)}</span></div>
+              <div className="flex justify-between"><span>Foam Materials</span><span className="font-medium">{fmtCurrency(costs.totalMaterialCost)}</span></div>
+              <div className="flex justify-between"><span>Inventory Materials</span><span className="font-medium">{fmtCurrency(costs.totalInventoryCost)}</span></div>
               <div className="flex justify-between"><span>Labor & Equipment</span><span className="font-medium">{fmtCurrency(costs.laborAndEquipmentCost)}</span></div>
               <div className="flex justify-between"><span>Additional Costs</span><span className="font-medium">{fmtCurrency(costs.additionalCostsTotal)}</span></div>
               <div className="flex justify-between border-t border-slate-200 dark:border-slate-500 mt-2 pt-2 font-semibold text-base"><span>Subtotal</span><span>{fmtCurrency(costs.subtotal)}</span></div>

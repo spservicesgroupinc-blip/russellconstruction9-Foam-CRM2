@@ -52,6 +52,14 @@ export interface Costs {
   laborAndEquipmentCost: number;
   lineItems: LineItem[];
   additionalCostsTotal: number;
+  inventoryCostBreakdown: {
+    itemId: number | '';
+    quantity: number;
+    name: string;
+    unitCost: number;
+    lineTotal: number;
+  }[];
+  totalInventoryCost: number;
   subtotal: number;
   overheadValue: number;
   preTaxTotal: number;
@@ -137,12 +145,39 @@ const EstimatePDF: React.FC<EstimatePDFProps> = ({ calc, costs, companyInfo, cus
       </section>
 
       {/* Scope of Work */}
-      <section className="flex-grow mb-8">
+      <section className="flex-grow mb-4">
         <h3 className="text-xl font-bold text-slate-800 mb-3 pb-2 border-b border-slate-200">Scope of Work</h3>
         <div className="text-slate-700 leading-relaxed text-sm">
           {scopeOfWork ? renderScope(scopeOfWork) : <p>Scope of work details will be generated here...</p>}
         </div>
       </section>
+
+      {/* Inventory Materials Table */}
+      {costs.inventoryCostBreakdown && costs.inventoryCostBreakdown.length > 0 && (
+        <section className="mb-4">
+          <h3 className="text-xl font-bold text-slate-800 mb-3 pb-2 border-b border-slate-200">Additional Materials & Supplies</h3>
+          <table className="w-full text-sm">
+            <thead className="border-b-2 border-slate-300">
+              <tr className="text-left text-slate-600">
+                <th className="font-semibold uppercase tracking-wider py-2">Item</th>
+                <th className="font-semibold uppercase tracking-wider py-2 text-center">Quantity</th>
+                <th className="font-semibold uppercase tracking-wider py-2 text-right">Unit Price</th>
+                <th className="font-semibold uppercase tracking-wider py-2 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {costs.inventoryCostBreakdown.map(item => (
+                <tr key={item.itemId} className="font-medium">
+                  <td className="py-2">{item.name}</td>
+                  <td className="py-2 text-center">{item.quantity}</td>
+                  <td className="py-2 text-right">{fmtCurrency(item.unitCost)}</td>
+                  <td className="py-2 text-right">{fmtCurrency(item.lineTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
       
       {/* Total Amount */}
       <section className="mt-auto">
