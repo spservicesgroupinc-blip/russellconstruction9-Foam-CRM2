@@ -72,7 +72,7 @@ function fmt(n: number, digits = 2) {
 interface SprayFoamCalculatorProps {
   onProceedToCosting: (results: CalculationResults) => void;
   customers: CustomerInfo[];
-  onAddCustomer: (customer: Omit<CustomerInfo, 'id'>) => void;
+  setIsAddCustomerModalOpen: (isOpen: boolean) => void;
   selectedCustomerId: number | '';
   setSelectedCustomerId: (id: number | '') => void;
   calculatorInputs: CalculatorInputs;
@@ -81,12 +81,10 @@ interface SprayFoamCalculatorProps {
   inventoryItems: InventoryItem[];
 }
 
-const EMPTY_CUSTOMER_FORM: Omit<CustomerInfo, 'id'> = { name: '', address: '', email: '', phone: '', notes: '' };
-
 export default function SprayFoamCalculator({ 
   onProceedToCosting, 
   customers, 
-  onAddCustomer,
+  setIsAddCustomerModalOpen,
   selectedCustomerId,
   setSelectedCustomerId,
   calculatorInputs,
@@ -95,8 +93,6 @@ export default function SprayFoamCalculator({
   inventoryItems
 }: SprayFoamCalculatorProps) {
 
-  const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
-  const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER_FORM);
   
   // Apply default yields from settings if they haven't been changed yet
   useEffect(() => {
@@ -192,20 +188,6 @@ export default function SprayFoamCalculator({
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     onProceedToCosting({ ...calc, customer: selectedCustomer });
   }
-
-  const handleSaveNewCustomer = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newCustomer.name && newCustomer.address) {
-      onAddCustomer(newCustomer);
-      setIsAddCustomerModalOpen(false);
-      setNewCustomer(EMPTY_CUSTOMER_FORM);
-    }
-  };
-
-  const handleNewCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewCustomer(prev => ({ ...prev, [name]: value }));
-  };
 
   function copyResults() {
     const { includeGableTriangles, wallFoamType, wallThicknessIn, wallWastePct, roofFoamType, roofThicknessIn, roofWastePct, openCellYield, closedCellYield, additionalSections } = calculatorInputs;
@@ -438,48 +420,6 @@ export default function SprayFoamCalculator({
       </div>
 
     </div>
-    
-    {/* FIX: Corrected multiple errors in the modal JSX. Replaced malformed span tags with proper input/textarea tags and attributes (e.g., 'text' to 'type="text"'). Also formatted for readability. */}
-    {isAddCustomerModalOpen && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" aria-modal="true" role="dialog">
-        <div className="relative w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl">
-          <button onClick={() => setIsAddCustomerModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <form onSubmit={handleSaveNewCustomer}>
-            <h2 className="text-xl font-bold">Add New Customer</h2>
-            <div className="mt-4 space-y-3">
-              <label className="block">
-                <span className={label}>Full Name</span>
-                <input type="text" name="name" value={newCustomer.name} onChange={handleNewCustomerChange} className={input} required />
-              </label>
-              <label className="block">
-                <span className={label}>Address</span>
-                <input type="text" name="address" value={newCustomer.address} onChange={handleNewCustomerChange} className={input} required />
-              </label>
-              <label className="block">
-                <span className={label}>Phone</span>
-                <input type="tel" name="phone" value={newCustomer.phone} onChange={handleNewCustomerChange} className={input} />
-              </label>
-              <label className="block">
-                <span className={label}>Email</span>
-                <input type="email" name="email" value={newCustomer.email} onChange={handleNewCustomerChange} className={input} />
-              </label>
-              <label className="block">
-                <span className={label}>Notes</span>
-                <textarea name="notes" rows={3} value={newCustomer.notes || ''} onChange={handleNewCustomerChange} className={input}></textarea>
-              </label>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => setIsAddCustomerModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
-              <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Save Customer</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    )}
     </>
   );
 }

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { CalculationResults } from './SprayFoamCalculator.tsx';
 
@@ -84,7 +85,7 @@ const EstimatePDF: React.FC<EstimatePDFProps> = ({ calc, costs, companyInfo, cus
 
   // Simple markdown-to-HTML parser for the scope of work
   const renderScope = (text: string) => {
-    return text
+    const elements = text
       .split('\n')
       .map(line => line.trim())
       .filter(line => line)
@@ -96,21 +97,30 @@ const EstimatePDF: React.FC<EstimatePDFProps> = ({ calc, costs, companyInfo, cus
           return <h4 key={index} className="font-semibold mt-2">{line.substring(2, line.length - 2)}</h4>;
         }
         return <p key={index}>{line}</p>;
-      })
-      .reduce((acc, el, index, arr) => {
-        if (el.type === 'li' && (index === 0 || arr[index-1].type !== 'li')) {
-          acc.push(<ul key={`ul-${index}`} className="space-y-1">{el}</ul>)
-        } else if (el.type === 'li') {
-          // Find the last ul and append to it
-          const lastUl = acc[acc.length - 1];
-          if (lastUl && lastUl.type === 'ul') {
-             lastUl.props.children.push(el);
-          }
+      });
+
+    return elements.reduce((acc, el) => {
+      if (el.type === 'li') {
+        const lastElement = acc[acc.length - 1];
+        // If the last element is already a <ul>, we append the new <li> to its children
+        if (lastElement && lastElement.type === 'ul') {
+          // Since props are immutable, we create a new element by cloning
+          const newChildren = Array.isArray(lastElement.props.children)
+            ? [...lastElement.props.children, el]
+            : [lastElement.props.children, el];
+
+          // Replace the last element with the new one
+          acc[acc.length - 1] = React.cloneElement(lastElement, lastElement.props, newChildren);
         } else {
-           acc.push(el);
+          // Otherwise, create a new <ul> and add the first <li>
+          acc.push(<ul key={`ul-${el.key}`} className="space-y-1">{el}</ul>);
         }
-        return acc;
-      }, [] as JSX.Element[]);
+      } else {
+        // If it's not a list item, just push it
+        acc.push(el);
+      }
+      return acc;
+    }, [] as JSX.Element[]);
   };
 
   return (

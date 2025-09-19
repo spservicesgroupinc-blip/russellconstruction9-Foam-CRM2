@@ -17,6 +17,7 @@ import TeamPage from './components/TeamPage.tsx';
 import MorePage from './components/MorePage.tsx';
 import TimeClockPage from './components/TimeClockPage.tsx';
 import InventoryPage from './components/InventoryPage.tsx';
+import QuickAddFAB from './components/QuickAddFAB.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
 import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
@@ -43,6 +44,8 @@ const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   additionalSections: [],
   inventoryLineItems: [],
 };
+
+const EMPTY_CUSTOMER_FORM: Omit<CustomerInfo, 'id'> = { name: '', address: '', email: '', phone: '', notes: '' };
 
 const CALENDAR_STORAGE_KEY = 'jobCalendarJobs';
 
@@ -82,6 +85,8 @@ const App: React.FC = () => {
   const [currentJob, setCurrentJob] = useState<EstimateRecord | null>(null);
   const [jobToSchedule, setJobToSchedule] = useState<EstimateRecord | null>(null);
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
+  const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER_FORM);
 
   // Material Order State
   const [soldJobData, setSoldJobData] = useState<EstimateRecord | null>(null);
@@ -199,6 +204,22 @@ const App: React.FC = () => {
     setCustomers(prev => [...prev, newCustomer]);
     return newCustomer;
   };
+
+  const handleSaveNewCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newCustomer.name && newCustomer.address) {
+      const addedCustomer = await handleAddCustomer(newCustomer);
+      setIsAddCustomerModalOpen(false);
+      setNewCustomer(EMPTY_CUSTOMER_FORM);
+      setSelectedCustomerId(addedCustomer.id);
+      setPage('calculator');
+    }
+  };
+
+  const handleNewCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewCustomer(prev => ({ ...prev, [name]: value }));
+  };
   
   const handleAddEmployee = async (employee: Omit<Employee, 'id'>) => {
     const newId = await db.employees.add(employee as Employee);
@@ -296,6 +317,17 @@ const App: React.FC = () => {
     setCalendarJobs(prev => prev.filter(j => j.id !== jobId));
   };
 
+  // FAB Handlers
+  const handleFabNewEstimate = () => {
+    setSelectedCustomerId('');
+    setPage('calculator');
+  };
+  
+  const handleFabNewCustomer = () => {
+    setNewCustomer(EMPTY_CUSTOMER_FORM);
+    setIsAddCustomerModalOpen(true);
+  };
+
   const getActiveTab = (currentPage: Page): Page => {
     if (['dashboard'].includes(currentPage)) return 'dashboard';
     if (['customers', 'customerDetail'].includes(currentPage)) return 'customers';
@@ -328,7 +360,7 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (page) {
       case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} />;
-      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} onAddCustomer={handleAddCustomer} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} />;
+      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} />;
       case 'costing': return calculationResults && <JobCosting calculationResults={calculationResults} onBack={() => setPage('calculator')} companyInfo={companyInfo!} onEstimateCreated={handleEstimateCreated} defaultCosts={appSettings.defaultCosts} inventoryItems={inventoryItems} />;
       case 'customers': return <Customers customers={customers} onAddCustomer={handleAddCustomer} onViewCustomer={(id) => { setSelectedCustomerId(id); setPage('customerDetail'); }} onUpdateCustomer={handleUpdateCustomer} />;
       case 'customerDetail': return <CustomerDetail customerId={selectedCustomerId as number} customers={customers} onBack={() => setPage('customers')} onJobSold={(est) => { handleUpdateJob(est.id!, { status: 'sold' }); handleJobSold(est); }} />;
@@ -358,6 +390,11 @@ const App: React.FC = () => {
         {renderPage()}
       </div>
       
+      <QuickAddFAB 
+          onNewEstimate={handleFabNewEstimate}
+          onNewCustomer={handleFabNewCustomer}
+      />
+
       <GeminiAgent 
          setMainPage={setPage}
          customers={customers}
@@ -387,6 +424,47 @@ const App: React.FC = () => {
             <NavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
         </div>
       </div>
+
+      {isAddCustomerModalOpen && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4" aria-modal="true" role="dialog">
+              <div className="relative w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl">
+                  <button onClick={() => setIsAddCustomerModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                  </button>
+                  <form onSubmit={handleSaveNewCustomer}>
+                      <h2 className="text-xl font-bold dark:text-white">Add New Customer</h2>
+                      <div className="mt-4 space-y-3">
+                          <label className="block">
+                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Full Name</span>
+                              <input type="text" name="name" value={newCustomer.name} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" required />
+                          </label>
+                          <label className="block">
+                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Address</span>
+                              <input type="text" name="address" value={newCustomer.address} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" required />
+                          </label>
+                          <label className="block">
+                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Phone</span>
+                              <input type="tel" name="phone" value={newCustomer.phone} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" />
+                          </label>
+                          <label className="block">
+                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Email</span>
+                              <input type="email" name="email" value={newCustomer.email} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" />
+                          </label>
+                          <label className="block">
+                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Notes</span>
+                              <textarea name="notes" rows={3} value={newCustomer.notes || ''} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"></textarea>
+                          </label>
+                      </div>
+                      <div className="mt-6 flex justify-end gap-3">
+                          <button type="button" onClick={() => setIsAddCustomerModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
+                          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Save Customer</button>
+                      </div>
+                  </form>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

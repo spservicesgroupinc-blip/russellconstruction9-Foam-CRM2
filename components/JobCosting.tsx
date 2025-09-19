@@ -4,7 +4,6 @@ import EstimatePDF, { CompanyInfo, CustomerInfo, Costs } from './EstimatePDF.tsx
 import MaterialOrderPDF from './MaterialOrderPDF.tsx';
 import QuoteSummaryPDF from './QuoteSummaryPDF.tsx';
 import InvoicePDF from './InvoicePDF.tsx';
-import { GoogleGenAI } from '@google/genai';
 import { saveEstimate, EstimateRecord, getTimeEntriesForJob, InventoryItem } from '../lib/db.ts';
 import { calculateCosts, CostSettings } from '../lib/processing.ts';
 
@@ -111,7 +110,6 @@ export default function JobCosting({
 
   // PDF Generation State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [aiNotes, setAiNotes] = useState('');
   const [generatedScope, setGeneratedScope] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -168,6 +166,24 @@ export default function JobCosting({
         setCostSettings(defaultCosts);
     }
   }, [isInvoiceMode, initialJobData, defaultCosts]);
+
+  // Pre-generate a scope of work when the modal is opened for an estimate
+  useEffect(() => {
+    if (isModalOpen && !isInvoiceMode) {
+        let scope = `**Scope of Work**\n\n`;
+        if (calc.wallBoardFeetWithWaste > 0) {
+            scope += `- Apply approximately ${calc.wallThicknessIn} inches of ${calc.wallFoamType === 'open-cell' ? 'Open-Cell' : 'Closed-Cell'} spray foam to ~${fmt(calc.wallTotal, 0)} sq ft of wall area${calc.gableAdd > 0 ? ' (including gables)' : ''}.\n`;
+        }
+        if (calc.roofBoardFeetWithWaste > 0) {
+            scope += `- Apply approximately ${calc.roofThicknessIn} inches of ${calc.roofFoamType === 'open-cell' ? 'Open-Cell' : 'Closed-Cell'} spray foam to ~${fmt(calc.roofArea, 0)} sq ft of roof deck area.\n`;
+        }
+        if (calc.inventoryLineItems && calc.inventoryLineItems.length > 0) {
+            scope += `\n**Additional Materials**\n- Supply and install other specified materials as per the estimate.\n`;
+        }
+        scope += `\n**General Procedures**\n- Site preparation to protect non-spray areas.\n- Clean up of work area upon completion.\n`;
+        setGeneratedScope(scope);
+    }
+  }, [isModalOpen, isInvoiceMode, calc]);
 
 
   const costs: Costs = useMemo(() => {
@@ -242,7 +258,6 @@ export default function JobCosting({
     }
     setTimeout(() => {
         setGenerationComplete(false);
-        setAiNotes('');
         setGeneratedScope('');
         setError('');
         setCreatedJob(null);
@@ -313,7 +328,7 @@ export default function JobCosting({
     setIsGenerating(true);
     setError('');
     setGenerationComplete(false);
-    setGenerationStatus('Generating Scope of Work with AI...');
+    setGenerationStatus('Generating PDFs...');
 
     const estimateNumber = `EST-${new Date().getTime().toString().slice(-6)}`;
     const orderNumber = `ORD-${new Date().getTime().toString().slice(-6)}`;
@@ -321,36 +336,7 @@ export default function JobCosting({
     setPdfOrderNumber(orderNumber);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-      let prompt = `You are an assistant for a spray foam insulation company. Your task is to generate a professional, customer-facing "Scope of Work" section for an estimate based on the following job details. Format the output clearly with line items using markdown for bolding and lists. Do not include any pricing, costs, or quantities of material sets. Focus only on the work to be performed. Be concise and professional.
-
-**Job Details:**`;
-
-      if (calc.wallBoardFeetWithWaste > 0) {
-        prompt += `
-- **Walls Application:**
-  - Area: Approximately ${fmt(calc.wallTotal, 0)} sq ft of exterior walls${calc.gableAdd > 0 ? ' (including gable ends)' : ''}.
-  - Foam Type: ${calc.wallFoamType === 'open-cell' ? 'Open-Cell' : 'Closed-Cell'} Spray Foam.
-  - Thickness: Apply foam to an approximate depth of ${calc.wallThicknessIn} inches.
-  - Goal: To create a continuous air seal and thermal barrier.`;
-      }
-      if (calc.roofBoardFeetWithWaste > 0) {
-        prompt += `
-- **Roof Deck Application:**
-  - Area: Approximately ${fmt(calc.roofArea, 0)} sq ft of the roof deck underside.
-  - Foam Type: ${calc.roofFoamType === 'open-cell' ? 'Open-Cell' : 'Closed-Cell'} Spray Foam.
-  - Thickness: Apply foam to an approximate depth of ${calc.roofThicknessIn} inches.
-  - Goal: To insulate and seal the roofline, preventing heat loss and improving building comfort.`;
-      }
-      if (aiNotes) {
-        prompt += `
-**Additional Notes & Special Instructions:**
-- ${aiNotes}`;
-      }
-      
-      const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-      const scopeText = response.text;
-      setGeneratedScope(scopeText); 
+      const scopeText = generatedScope;
 
       await new Promise(resolve => setTimeout(resolve, 100));
       
@@ -420,24 +406,15 @@ export default function JobCosting({
         // 1. Convert PDF blob to Base64
         const pdfBase64 = await blobToBase64(estimatePdfBlob);
 
-        // 2. Use AI to generate email body
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-        const emailPrompt = `You are an assistant for a spray foam insulation company. Your task is to generate a professional, friendly, and concise email body to send with a PDF estimate.
-        Use the following details:
-        - Customer Name: ${customer.name}
-        - Company Name: ${companyInfo.name}
-        - Estimate Total: ${fmtCurrency(createdJob.costsData?.finalQuote || 0)}
-        - Estimate Number: ${createdJob.estimateNumber}
-        The email should:
-        1. Greet the customer by name.
-        2. State that their estimate is attached.
-        3. Briefly mention the total amount.
-        4. Encourage them to review it and ask questions.
-        5. End with a professional closing from the company.
-        Do not include a subject line. Respond with only the email body text.`;
+        // 2. Generate email body from a template
+        const emailBody = `Hello ${customer.name},
 
-        const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: emailPrompt });
-        const emailBody = response.text;
+Please find your estimate (${createdJob.estimateNumber}) attached to this email. The total for the proposed work is ${fmtCurrency(createdJob.costsData?.finalQuote || 0)}.
+
+Please let us know if you have any questions. We look forward to working with you.
+
+Thank you,
+${companyInfo.name}`;
 
         // 3. Send to webhook
         const webhookUrl = 'https://hooks.zapier.com/hooks/catch/22080087/bw0q9co/'; // A new, dedicated webhook for sending emails
@@ -715,8 +692,15 @@ export default function JobCosting({
                       </div>
 
                       <div>
-                        <label htmlFor="ai-notes" className={label}>Estimator Notes for AI (Optional)</label>
-                        <textarea id="ai-notes" rows={2} className={`${input} text-sm`} value={aiNotes} onChange={(e) => setAiNotes(e.target.value)} placeholder="e.g., Pay special attention to sealing around skylights." />
+                          <label htmlFor="scope-of-work" className={label}>Scope of Work</label>
+                          <textarea
+                              id="scope-of-work"
+                              rows={8}
+                              className={`${input} text-sm`}
+                              value={generatedScope}
+                              onChange={(e) => setGeneratedScope(e.target.value)}
+                              placeholder="Describe the work to be performed..."
+                          />
                       </div>
                       
                        <div className="pt-4 border-t border-slate-200 dark:border-slate-700">

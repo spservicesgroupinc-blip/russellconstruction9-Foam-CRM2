@@ -10,13 +10,7 @@ interface CustomersProps {
   onUpdateCustomer: (customer: CustomerInfo) => void;
 }
 
-const EMPTY_CUSTOMER: Omit<CustomerInfo, 'id'> = {
-  name: '', address: '', email: '', phone: ''
-};
-
 const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewCustomer, onUpdateCustomer }) => {
-  const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerActivity, setCustomerActivity] = useState<Record<number, number>>({});
   const [isLoadingActivity, setIsLoadingActivity] = useState(true);
   const [view, setView] = useState<'list' | 'map'>('list');
@@ -47,24 +41,7 @@ const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewC
     }
   }, [customers]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setNewCustomer(prev => ({...prev, [name]: value}));
-  };
-  
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newCustomer.name && newCustomer.address) {
-      onAddCustomer(newCustomer);
-      setNewCustomer(EMPTY_CUSTOMER);
-      setIsModalOpen(false);
-    }
-  };
-
   const card = "rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm";
-  const h2 = "text-xl font-semibold tracking-tight";
-  const label = "text-sm font-medium text-slate-700 dark:text-slate-200";
-  const input = "mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600 px-3 py-2 text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500";
   
   const ViewToggleButton: React.FC<{target: 'list' | 'map', label: string, icon: JSX.Element}> = ({ target, label, icon }) => {
     const isActive = view === target;
@@ -104,12 +81,6 @@ const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewC
                     icon={<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
                 />
             </div>
-            <button 
-                onClick={() => setIsModalOpen(true)}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700"
-            >
-                + Add Customer
-            </button>
         </div>
 
         {view === 'list' ? (
@@ -148,29 +119,6 @@ const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewC
            </div>
         )}
       </div>
-      
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" aria-modal="true" role="dialog">
-          <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-800 p-6 shadow-xl">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-            <form onSubmit={handleSubmit}>
-              <h2 className="text-xl font-bold dark:text-white">Add New Customer</h2>
-              <div className="mt-4 space-y-3">
-                <label className="block"><span className={label}>Full Name</span><input type="text" name="name" value={newCustomer.name} onChange={handleChange} className={input} required /></label>
-                <label className="block"><span className={label}>Address</span><input type="text" name="address" value={newCustomer.address} onChange={handleChange} className={input} required /></label>
-                <label className="block"><span className={label}>Phone</span><input type="tel" name="phone" value={newCustomer.phone} onChange={handleChange} className={input} /></label>
-                <label className="block"><span className={label}>Email</span><input type="email" name="email" value={newCustomer.email} onChange={handleChange} className={input} /></label>
-              </div>
-              <div className="mt-6 flex justify-end gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
-                <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Save Customer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   );
 };
