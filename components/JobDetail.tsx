@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { EstimateRecord, JobStatus, getTimeEntriesForJob } from '../lib/db.ts';
 import { CustomerInfo } from './EstimatePDF.tsx';
@@ -11,6 +12,7 @@ interface JobDetailProps {
     onUpdateJob: (jobId: number, updates: Partial<EstimateRecord>) => void;
     onPrepareInvoice: (job: EstimateRecord) => void;
     onScheduleJob: (job: EstimateRecord) => void;
+    onViewCustomer: (customerId: number) => void;
 }
 
 const fmt = (n: number, digits = 2) => n.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
@@ -33,12 +35,57 @@ const renderScopeForDisplay = (text: string = '') => {
     })
 };
 
+const JobWorkflowStepper: React.FC<{ status: JobStatus, onSetStatus: (newStatus: JobStatus) => void }> = ({ status, onSetStatus }) => {
+    const steps: JobStatus[] = ['estimate', 'sold', 'invoiced', 'paid'];
+    const currentStepIndex = steps.indexOf(status);
 
-const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack, onUpdateJob, onPrepareInvoice, onScheduleJob }) => {
+    return (
+        <div className="w-full px-2 sm:px-4">
+            <div className="flex items-center">
+                {steps.map((step, index) => {
+                    const isCompleted = index < currentStepIndex;
+                    const isCurrent = index === currentStepIndex;
+                    const isClickable = index <= currentStepIndex + 1 || (status === 'paid' && index === steps.length -1);
+
+                    return (
+                        <React.Fragment key={step}>
+                            <button
+                                disabled={!isClickable}
+                                onClick={() => isClickable && onSetStatus(step)}
+                                className="flex flex-col items-center relative"
+                            >
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300
+                                    ${isCompleted ? 'bg-blue-600 text-white' : ''}
+                                    ${isCurrent ? 'bg-blue-600 text-white ring-4 ring-blue-200 dark:ring-blue-500/50' : ''}
+                                    ${!isCompleted && !isCurrent ? 'bg-slate-200 dark:bg-slate-500 text-slate-500 dark:text-slate-300' : ''}
+                                `}>
+                                    {isCompleted ? (
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                    ) : (
+                                        <span>{index + 1}</span>
+                                    )}
+                                </div>
+                                <span className={`mt-2 text-xs font-semibold text-center absolute top-full whitespace-nowrap transition-colors
+                                    ${isCurrent || isCompleted ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}
+                                `}>{step.charAt(0).toUpperCase() + step.slice(1)}</span>
+                            </button>
+                            {index < steps.length - 1 && (
+                                <div className={`flex-1 h-1 mx-2 rounded-full transition-colors ${isCompleted ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-500'}`}></div>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+
+const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack, onUpdateJob, onPrepareInvoice, onScheduleJob, onViewCustomer }) => {
     const customer = customers.find(c => c.id === job.customerId);
     const { calcData, costsData, status } = job;
     
-    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [timeLog, setTimeLog] = useState<TimeEntry[]>([]);
     const [isLoadingLog, setIsLoadingLog] = useState(true);
     const [isEditingScope, setIsEditingScope] = useState(false);
@@ -52,14 +99,8 @@ const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack
                 .catch(console.error)
                 .finally(() => setIsLoadingLog(false));
         }
-        // When the job prop changes, update the local state for the scope editor
         setEditedScope(job.scopeOfWork || '');
     }, [job]);
-
-    const handleStatusChange = (newStatus: JobStatus) => {
-        onUpdateJob(job.id!, { status: newStatus });
-        setIsStatusDropdownOpen(false);
-    };
     
     const handleScopeSave = () => {
         onUpdateJob(job.id!, { scopeOfWork: editedScope });
@@ -76,14 +117,7 @@ const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack
     };
 
     const totalTrackedHours = timeLog.reduce((sum, entry) => sum + (entry.durationHours || 0), 0);
-
-    const statusMap: Record<JobStatus, { text: string; bg: string; text_color: string; }> = {
-        'estimate': { text: 'Estimate', bg: 'bg-blue-100 dark:bg-blue-900/50', text_color: 'text-blue-800 dark:text-blue-300' },
-        'sold': { text: 'Sold', bg: 'bg-amber-100 dark:bg-amber-900/50', text_color: 'text-amber-800 dark:text-amber-300' },
-        'invoiced': { text: 'Invoiced', bg: 'bg-slate-200 dark:bg-slate-600', text_color: 'text-slate-800 dark:text-slate-200' },
-        'paid': { text: 'Paid', bg: 'bg-green-100 dark:bg-green-900/50', text_color: 'text-green-800 dark:text-green-300' },
-    };
-
+    
     const card = "rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm p-6";
     const h2 = "text-lg font-semibold tracking-tight text-slate-800 dark:text-slate-100";
     const label = "text-sm font-medium text-slate-500 dark:text-slate-400";
@@ -101,38 +135,55 @@ const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack
         )
     }
 
+    const renderWorkflowAction = () => {
+        const baseButtonClass = "w-full sm:w-auto rounded-lg px-6 py-3 text-base text-white font-semibold shadow-sm transition-colors flex-grow sm:flex-grow-0";
+        switch (status) {
+            case 'estimate':
+                return <button onClick={() => onUpdateJob(job.id!, { status: 'sold' })} className={`${baseButtonClass} bg-blue-600 hover:bg-blue-700`}>Mark as Sold</button>;
+            case 'sold':
+                return <button onClick={() => onPrepareInvoice(job)} className={`${baseButtonClass} bg-green-600 hover:bg-green-700`}>Prepare Invoice</button>;
+            case 'invoiced':
+                return <button onClick={() => setIsPaymentModalOpen(true)} className={`${baseButtonClass} bg-indigo-600 hover:bg-indigo-700`}>Record Payment</button>;
+            case 'paid':
+                return <div className="text-center sm:text-left text-lg font-semibold text-green-600 dark:text-green-400 flex items-center gap-2">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    Job Complete & Paid
+                </div>;
+        }
+    };
+
     return (
          <div className="mx-auto max-w-3xl p-4 space-y-4">
             <button onClick={onBack} className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">&larr; Back to Jobs List</button>
             
             <div className={card}>
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h1 className="text-2xl font-bold">{customer?.name || 'Unknown Customer'}</h1>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">{job.estimateNumber} &bull; Created {new Date(job.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <div className="relative">
-                        <button onClick={() => setIsStatusDropdownOpen(p => !p)} className={`text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1 ${statusMap[status].bg} ${statusMap[status].text_color}`}>
-                            {statusMap[status].text}
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                        </button>
-                        {isStatusDropdownOpen && (
-                            <div className="absolute right-0 mt-2 w-36 bg-white dark:bg-slate-700 rounded-md shadow-lg z-10 border border-slate-200 dark:border-slate-600">
-                                {(Object.keys(statusMap) as JobStatus[]).map(s => (
-                                    <button key={s} onClick={() => handleStatusChange(s)} className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600">
-                                        {statusMap[s].text}
-                                    </button>
-                                ))}
-                            </div>
+                        {customer ? (
+                            <button onClick={() => onViewCustomer(customer.id)} className="text-left group">
+                                <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400 group-hover:underline">{customer.name}</h1>
+                            </button>
+                        ) : (
+                            <h1 className="text-2xl font-bold dark:text-white">Unknown Customer</h1>
                         )}
+                        <p className="text-sm text-slate-500 dark:text-slate-400">{job.estimateNumber} &bull; Created {new Date(job.createdAt).toLocaleDateString()}</p>
                     </div>
                 </div>
                 
-                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-600 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button onClick={() => onScheduleJob(job)} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-semibold shadow-sm hover:bg-blue-700">Schedule Job</button>
-                    <button onClick={() => onPrepareInvoice(job)} className="w-full rounded-lg bg-slate-800 dark:bg-slate-600 px-4 py-2.5 text-white font-medium shadow-sm hover:bg-slate-900 dark:hover:bg-slate-500">Create Invoice</button>
-                    <button onClick={() => handleViewPdf(job.estimatePdf)} className="w-full rounded-lg bg-slate-200 dark:bg-slate-500/50 px-4 py-2.5 text-slate-800 dark:text-slate-100 font-medium shadow-sm hover:bg-slate-300 dark:hover:bg-slate-500">Estimate PDF</button>
-                    <button onClick={() => handleViewPdf(job.materialOrderPdf)} className="w-full rounded-lg bg-slate-200 dark:bg-slate-500/50 px-4 py-2.5 text-slate-800 dark:text-slate-100 font-medium shadow-sm hover:bg-slate-300 dark:hover:bg-slate-500">Materials PDF</button>
+                <div className="mb-8 pt-4">
+                     <JobWorkflowStepper status={status} onSetStatus={(newStatus) => onUpdateJob(job.id!, { status: newStatus })} />
+                </div>
+                
+                <div className="mt-4 pt-6 border-t border-slate-200 dark:border-slate-600 flex flex-col sm:flex-row justify-center sm:justify-between items-center gap-4">
+                    {renderWorkflowAction()}
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                        <button onClick={() => onScheduleJob(job)} className="rounded-lg bg-slate-100 dark:bg-slate-600 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-200 dark:hover:bg-slate-500">Schedule</button>
+                        <button onClick={() => handleViewPdf(job.estimatePdf)} className="rounded-lg bg-slate-100 dark:bg-slate-600 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-200 dark:hover:bg-slate-500">Estimate PDF</button>
+                        {(status === 'invoiced' || status === 'paid') && job.invoicePdf && (
+                           <button onClick={() => handleViewPdf(job.invoicePdf!)} className="rounded-lg bg-slate-100 dark:bg-slate-600 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-200 dark:hover:bg-slate-500">Invoice PDF</button>
+                        )}
+                        <button onClick={() => handleViewPdf(job.materialOrderPdf)} className="rounded-lg bg-slate-100 dark:bg-slate-600 px-4 py-2 text-sm text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-200 dark:hover:bg-slate-500">Materials PDF</button>
+                    </div>
                 </div>
             </div>
 
@@ -238,6 +289,29 @@ const JobDetail: React.FC<JobDetailProps> = ({ job, customers, employees, onBack
                 )}
             </div>
 
+            {isPaymentModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" aria-modal="true" role="dialog">
+                    <div className="relative w-full max-w-sm rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl">
+                         <button onClick={() => setIsPaymentModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <h2 className="text-xl font-bold dark:text-white">Record Payment</h2>
+                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                            Mark this invoice of <strong className="dark:text-white">{fmtCurrency(costsData.finalQuote)}</strong> as paid?
+                        </p>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button type="button" onClick={() => setIsPaymentModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
+                            <button 
+                                type="button" 
+                                onClick={() => {
+                                    onUpdateJob(job.id!, { status: 'paid' });
+                                    setIsPaymentModalOpen(false);
+                                }}
+                                className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Confirm Payment</button>
+                        </div>
+                    </div>
+                </div>
+            )}
          </div>
     );
 };

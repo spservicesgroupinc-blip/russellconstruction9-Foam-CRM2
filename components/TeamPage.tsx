@@ -1,9 +1,7 @@
+
 import React, { useState } from 'react';
-// FIX: Added .ts extension for type imports
 import { Employee } from './types.ts';
-// FIX: Added .ts extension for db imports
 import { EstimateRecord } from '../lib/db.ts';
-// FIX: Added .tsx extension for component imports
 import Employees from './Employees.tsx';
 import EmployeeTimeLog from './EmployeeTimeLog.tsx';
 

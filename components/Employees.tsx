@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-// FIX: Added .ts extension for type imports
 import { Employee } from './types.ts';
 
 interface EmployeesProps {

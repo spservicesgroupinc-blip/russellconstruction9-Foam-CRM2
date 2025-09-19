@@ -104,9 +104,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className={card}>
                     <h2 className={h2}>{isInitialSetup ? 'Your Company Details' : 'Company Details'}</h2>
-                    {/* FIX: Corrected invalid boolean props on input fields to use the 'type' attribute. */}
                     <div className="mt-4 space-y-4">
-                        {/* FIX: Replaced invalid boolean props `text`, `tel`, and `email` with the correct `type` attribute. */}
                         <label className="block"><span className={label}>Company Name</span><input type="text" name="name" value={info.name} onChange={handleInfoChange} className={input} required /></label>
                         <label className="block"><span className={label}>Address</span><input type="text" name="address" value={info.address} onChange={handleInfoChange} className={input} required /></label>
                         <label className="block"><span className={label}>Phone</span><input type="tel" name="phone" value={info.phone} onChange={handleInfoChange} className={input} required /></label>
@@ -133,18 +131,14 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                              <div className="mt-4 space-y-4">
                                 <div>
                                     <h3 className="font-medium text-slate-700 dark:text-slate-200">Material Yields</h3>
-                                    {/* FIX: Corrected invalid 'number' prop on input to 'type="number"'. */}
                                     <div className="mt-2 grid grid-cols-2 gap-3">
-                                        {/* FIX: Replaced invalid boolean prop `number` with the correct `type="number"` attribute. */}
                                         <label className="block"><span className={label}>Open-cell yield</span><input type="number" min={1} step={1} className={input} name="openCellYield" value={appSettings.defaultYields.openCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                         <label className="block"><span className={label}>Closed-cell yield</span><input type="number" min={1} step={1} className={input} name="closedCellYield" value={appSettings.defaultYields.closedCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                     </div>
                                 </div>
                                 <div className="border-t border-slate-200 dark:border-slate-600 pt-4">
                                     <h3 className="font-medium text-slate-700 dark:text-slate-200">Job Costing</h3>
-                                    {/* FIX: Corrected invalid 'number' prop on inputs to 'type="number"'. */}
                                     <div className="mt-2 grid grid-cols-2 gap-3">
-                                        {/* FIX: Replaced invalid boolean prop `number` with the correct `type="number"` attribute on all costing inputs. */}
                                         <label className="block"><span className={label}>OC Cost/Set ($)</span><input type="number" min={0} className={input} name="ocCostPerSet" value={appSettings.defaultCosts.ocCostPerSet} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>OC Markup (%)</span><input type="number" min={0} className={input} name="ocMarkup" value={appSettings.defaultCosts.ocMarkup} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>CC Cost/Set ($)</span><input type="number" min={0} className={input} name="ccCostPerSet" value={appSettings.defaultCosts.ccCostPerSet} onChange={handleCostsChange} /></label>

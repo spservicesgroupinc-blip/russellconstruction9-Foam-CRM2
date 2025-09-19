@@ -184,7 +184,7 @@ const TimeClockPage: React.FC<TimeClockPageProps> = ({ employees, jobs }) => {
 
         const newEntry: TimeEntry = {
             employeeId: selectedEmployee.id!,
-            jobId: jobToClockIn,
+            jobId: jobToClockIn as number,
             startTime: new Date().toISOString(),
             startLat: coords?.latitude,
             startLng: coords?.longitude,
@@ -260,7 +260,7 @@ const TimeClockPage: React.FC<TimeClockPageProps> = ({ employees, jobs }) => {
         // 2. Clock into the new job
         const newEntry: TimeEntry = {
             employeeId: selectedEmployee.id!,
-            jobId: jobToClockIn,
+            jobId: jobToClockIn as number,
             startTime: switchTime.toISOString(), // Start time is the end time of the previous entry
             startLat: coords?.latitude,
             startLng: coords?.longitude,

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import SprayFoamCalculator, { CalculationResults, CalculatorInputs, InventoryLineItem } from './components/SprayFoamCalculator.tsx';
 import JobCosting from './components/JobCosting.tsx';
@@ -235,6 +236,7 @@ const App: React.FC = () => {
 
   const handleProceedToCosting = (results: CalculationResults) => {
     setCalculationResults(results);
+    setCurrentJob(null); // Ensure we are in estimate mode, not invoice mode
     setPage('costing');
   };
 
@@ -248,6 +250,11 @@ const App: React.FC = () => {
       setCurrentJob(job);
       setPage('jobDetail');
   }
+  
+  const handleViewCustomer = (customerId: number) => {
+    setSelectedCustomerId(customerId);
+    setPage('customerDetail');
+  };
   
   const handleDeleteJob = async (jobId: number) => {
       if (window.confirm("Are you sure you want to permanently delete this job record?")) {
@@ -274,6 +281,17 @@ const App: React.FC = () => {
       setSoldJobData(estimate);
       setPage('materialOrder');
   }
+  
+  const handleFinalizeInvoice = async (finalJobData: EstimateRecord, invoicePdfBlob: Blob) => {
+      await handleUpdateJob(finalJobData.id!, { 
+        status: 'invoiced', 
+        costsData: finalJobData.costsData,
+        invoicePdf: invoicePdfBlob 
+      });
+      // The local `currentJob` is already updated via handleUpdateJob's side effect
+      setPage('jobDetail');
+  };
+
 
   const handleScheduleJob = (job: EstimateRecord) => {
       setJobToSchedule(job);
@@ -320,6 +338,7 @@ const App: React.FC = () => {
   // FAB Handlers
   const handleFabNewEstimate = () => {
     setSelectedCustomerId('');
+    resetCurrentJob();
     setPage('calculator');
   };
   
@@ -361,11 +380,34 @@ const App: React.FC = () => {
     switch (page) {
       case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} />;
       case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} />;
-      case 'costing': return calculationResults && <JobCosting calculationResults={calculationResults} onBack={() => setPage('calculator')} companyInfo={companyInfo!} onEstimateCreated={handleEstimateCreated} defaultCosts={appSettings.defaultCosts} inventoryItems={inventoryItems} />;
-      case 'customers': return <Customers customers={customers} onAddCustomer={handleAddCustomer} onViewCustomer={(id) => { setSelectedCustomerId(id); setPage('customerDetail'); }} onUpdateCustomer={handleUpdateCustomer} />;
-      case 'customerDetail': return <CustomerDetail customerId={selectedCustomerId as number} customers={customers} onBack={() => setPage('customers')} onJobSold={(est) => { handleUpdateJob(est.id!, { status: 'sold' }); handleJobSold(est); }} />;
+      case 'costing': 
+        if (currentJob) { // Invoice mode from an existing job
+            return <JobCosting 
+                        calculationResults={currentJob.calcData} 
+                        onBack={() => setPage('jobDetail')}
+                        companyInfo={companyInfo!}
+                        isInvoiceMode={true}
+                        initialJobData={currentJob}
+                        onFinalizeInvoice={handleFinalizeInvoice}
+                        defaultCosts={appSettings.defaultCosts} 
+                        inventoryItems={inventoryItems}
+                    />;
+        } else if (calculationResults) { // Estimate mode from the calculator
+            return <JobCosting 
+                        calculationResults={calculationResults} 
+                        onBack={() => { setCalculationResults(null); setPage('calculator'); }} 
+                        companyInfo={companyInfo!} 
+                        onEstimateCreated={handleEstimateCreated} 
+                        defaultCosts={appSettings.defaultCosts}
+                        inventoryItems={inventoryItems}
+                    />;
+        }
+        setPage('dashboard'); // Fallback if state is inconsistent
+        return null;
+      case 'customers': return <Customers customers={customers} onAddCustomer={handleAddCustomer} onViewCustomer={handleViewCustomer} onUpdateCustomer={handleUpdateCustomer} />;
+      case 'customerDetail': return <CustomerDetail customerId={selectedCustomerId as number} onBack={() => setPage('customers')} onViewJob={handleViewJob} onUpdateCustomer={handleUpdateCustomer}/>;
       case 'jobsList': return <JobsList jobs={jobs} customers={customers} onViewJob={handleViewJob} onDeleteJob={handleDeleteJob} filter={filter} setFilter={setFilter} />;
-      case 'jobDetail': return currentJob && <JobDetail job={currentJob} customers={customers} employees={employees} onBack={() => { resetCurrentJob(); setPage('jobsList'); }} onUpdateJob={handleUpdateJob} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('invoicing'); }} onScheduleJob={handleScheduleJob} />;
+      case 'jobDetail': return currentJob && <JobDetail job={currentJob} customers={customers} employees={employees} onBack={() => { resetCurrentJob(); setPage('jobsList'); }} onUpdateJob={handleUpdateJob} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); }} onScheduleJob={handleScheduleJob} onViewCustomer={handleViewCustomer} />;
       case 'materialOrder': return <MaterialOrder soldJobData={soldJobData} onHandInventory={onHandInventory} setOnHandInventory={setOnHandInventory} />;
       case 'invoicing': return <Invoicing soldJobs={jobs.filter(j => j.status === 'sold' || j.status === 'invoiced')} customers={customers} companyInfo={companyInfo!} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); /* re-use for invoice editing */ }} />;
       case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} />;

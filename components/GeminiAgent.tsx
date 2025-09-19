@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { CompanyInfo, CustomerInfo } from './EstimatePDF.tsx';
@@ -7,7 +6,6 @@ import { OnHandInventory } from './MaterialOrder.tsx';
 import { calculateResults } from '../lib/processing.ts';
 import { Job } from './types.ts';
 import { fmtInput, addDays } from './utils.ts';
-// FIX: Import Page and AppSettings from App.tsx to ensure type consistency.
 import { AppSettings, Page } from '../App.tsx';
 
 
@@ -15,12 +13,9 @@ import { AppSettings, Page } from '../App.tsx';
 declare var jspdf: any;
 declare var html2canvas: any;
 
-// FIX: Removed local Page type definition to use the one imported from App.tsx, resolving the type mismatch.
-
 interface GeminiAgentProps {
   setMainPage: (page: Page) => void;
   customers: CustomerInfo[];
-  // FIX: Updated prop to handle the async nature of handleAddCustomer.
   handleAddCustomer: (customer: Omit<CustomerInfo, 'id'>) => Promise<CustomerInfo>;
   handleUpdateCustomer: (customer: CustomerInfo) => void;
   setSelectedCustomerId: (id: number | '') => void;
@@ -42,7 +37,13 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   text: string;
   sources?: { title: string; uri: string }[];
-  imageUrl?: string; // For generated images
+  imageUrl?: string; // For UI display
+  imagePartsForApi?: { // For API history
+    inlineData: {
+      mimeType: string;
+      data: string; // base64
+    }
+  };
 }
 
 
@@ -67,6 +68,8 @@ const GeminiAgent: React.FC<GeminiAgentProps> = (props) => {
   const chatWindowRef = useRef<HTMLDivElement>(null); 
   const fabRef = useRef<HTMLDivElement>(null); 
   const fileInputRef = useRef<HTMLInputElement>(null); 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   
   // State and refs for Talk Mode
   const [isListening, setIsListening] = useState(false);
@@ -139,121 +142,158 @@ const GeminiAgent: React.FC<GeminiAgentProps> = (props) => {
       }
     }
   };
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+        const file = event.target.files[0];
+        setImageFile(file);
+        setImagePreview(URL.createObjectURL(file));
+    }
+  };
+
+  const removeImage = () => {
+      setImageFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) {
+          fileInputRef.current.value = ""; // Reset the file input
+      }
+  };
 
 
   const handleSend = async (text?: string) => {
     const query = text || inputText.trim();
-    if (query === '' || isLoading) return;
+    if ((query === '' && !imageFile) || isLoading) return;
 
     setInputText('');
     setIsLoading(true);
 
-    const userMessage: Message = { role: 'user', text: query };
+    const fileToSend = imageFile;
+    const previewUrl = imagePreview;
+    removeImage();
+
+    let imagePartForApi: { inlineData: { mimeType: string, data: string } } | undefined = undefined;
+    if (fileToSend) {
+        const base64ImageData = await toBase64(fileToSend);
+        imagePartForApi = {
+            inlineData: {
+                mimeType: fileToSend.type,
+                data: base64ImageData,
+            }
+        };
+    }
+
+    const userMessage: Message = {
+        role: 'user',
+        text: query,
+        imageUrl: previewUrl || undefined,
+        imagePartsForApi: imagePartForApi
+    };
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
       
-      const functionDeclarations = [
-        {
-          name: 'navigate',
-          description: 'Navigate to a specific page within the application.',
-          parameters: {
-            type: Type.OBJECT,
-            properties: {
-              page: {
-                type: Type.STRING,
-                description: "The page to navigate to. Must be one of: 'dashboard', 'calculator', 'customers', 'schedule', 'settings', 'team', 'jobsList', 'materialOrder', 'invoicing', 'gantt'."
+        const functionDeclarations = [
+            {
+              name: 'navigate',
+              description: 'Navigate to a specific page within the application.',
+              parameters: {
+                type: Type.OBJECT,
+                properties: {
+                  page: {
+                    type: Type.STRING,
+                    description: "The page to navigate to. Must be one of: 'dashboard', 'calculator', 'customers', 'schedule', 'settings', 'team', 'jobsList', 'materialOrder', 'invoicing', 'gantt'."
+                  }
+                },
+                required: ['page']
               }
             },
-            required: ['page']
-          }
-        },
-        {
-          name: 'addCustomer',
-          description: 'Add a new customer to the CRM.',
-          parameters: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING, description: 'Full name of the customer.' },
-              address: { type: Type.STRING, description: 'Full address of the customer.' },
-              phone: { type: Type.STRING, description: 'Phone number of the customer.' },
-              email: { type: Type.STRING, description: 'Email address of the customer.' },
-            },
-            required: ['name', 'address']
-          }
-        },
-        {
-          name: 'startEstimate',
-          description: 'Start a new estimate, optionally for a specific customer. Navigates to the calculator page.',
-          parameters: {
-            type: Type.OBJECT,
-            properties: {
-              customerId: { type: Type.NUMBER, description: 'The ID of the customer to start the estimate for. Omit if not specified.' }
-            },
-          }
-        },
-        {
-            name: 'updateCalculator',
-            description: 'Update one or more fields in the spray foam calculator.',
-            parameters: {
+            {
+              name: 'addCustomer',
+              description: 'Add a new customer to the CRM.',
+              parameters: {
                 type: Type.OBJECT,
                 properties: {
-                    length: { type: Type.NUMBER },
-                    width: { type: Type.NUMBER },
-                    wallHeight: { type: Type.NUMBER },
-                    wallThicknessIn: { type: Type.NUMBER },
-                    roofThicknessIn: { type: Type.NUMBER },
+                  name: { type: Type.STRING, description: 'Full name of the customer.' },
+                  address: { type: Type.STRING, description: 'Full address of the customer.' },
+                  phone: { type: Type.STRING, description: 'Phone number of the customer.' },
+                  email: { type: Type.STRING, description: 'Email address of the customer.' },
+                },
+                required: ['name', 'address']
+              }
+            },
+            {
+              name: 'startEstimate',
+              description: 'Start a new estimate, optionally for a specific customer. Navigates to the calculator page.',
+              parameters: {
+                type: Type.OBJECT,
+                properties: {
+                  customerId: { type: Type.NUMBER, description: 'The ID of the customer to start the estimate for. Omit if not specified.' }
+                },
+              }
+            },
+            {
+                name: 'updateCalculator',
+                description: 'Update one or more fields in the spray foam calculator.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        length: { type: Type.NUMBER },
+                        width: { type: Type.NUMBER },
+                        wallHeight: { type: Type.NUMBER },
+                        wallThicknessIn: { type: Type.NUMBER },
+                        roofThicknessIn: { type: Type.NUMBER },
+                    }
+                }
+            },
+            {
+                name: 'getOnHandInventory',
+                description: 'Retrieves the current on-hand inventory levels for open-cell and closed-cell foam sets.',
+                parameters: {
+                  type: Type.OBJECT,
+                  properties: {}
+                }
+            },
+            {
+                name: 'updateOnHandInventory',
+                description: 'Updates the on-hand inventory levels.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        ocSets: { type: Type.NUMBER, description: 'The new total quantity of open-cell sets.' },
+                        ccSets: { type: Type.NUMBER, description: 'The new total quantity of closed-cell sets.' },
+                    }
+                }
+            },
+            {
+                name: 'scheduleJob',
+                description: 'Adds a new job to the calendar schedule.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING, description: 'The name or title of the job.' },
+                        startDate: { type: Type.STRING, description: 'The start date in YYYY-MM-DD format. If only a day is mentioned, assume the current month and year.' },
+                        durationDays: { type: Type.NUMBER, description: 'The duration of the job in days.' },
+                    },
+                    required: ['name', 'startDate', 'durationDays']
+                }
+            },
+            {
+                name: 'findJob',
+                description: 'Finds a scheduled job by name or keyword.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        keyword: { type: Type.STRING, description: 'The name or keyword to search for in the job schedule.' }
+                    },
+                    required: ['keyword']
                 }
             }
-        },
-        {
-            name: 'getOnHandInventory',
-            description: 'Retrieves the current on-hand inventory levels for open-cell and closed-cell foam sets.',
-            parameters: {
-              type: Type.OBJECT,
-              properties: {}
-            }
-        },
-        {
-            name: 'updateOnHandInventory',
-            description: 'Updates the on-hand inventory levels.',
-            parameters: {
-                type: Type.OBJECT,
-                properties: {
-                    ocSets: { type: Type.NUMBER, description: 'The new total quantity of open-cell sets.' },
-                    ccSets: { type: Type.NUMBER, description: 'The new total quantity of closed-cell sets.' },
-                }
-            }
-        },
-        {
-            name: 'scheduleJob',
-            description: 'Adds a new job to the calendar schedule.',
-            parameters: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING, description: 'The name or title of the job.' },
-                    startDate: { type: Type.STRING, description: 'The start date in YYYY-MM-DD format. If only a day is mentioned, assume the current month and year.' },
-                    durationDays: { type: Type.NUMBER, description: 'The duration of the job in days.' },
-                },
-                required: ['name', 'startDate', 'durationDays']
-            }
-        },
-        {
-            name: 'findJob',
-            description: 'Finds a scheduled job by name or keyword.',
-            parameters: {
-                type: Type.OBJECT,
-                properties: {
-                    keyword: { type: Type.STRING, description: 'The name or keyword to search for in the job schedule.' }
-                },
-                required: ['keyword']
-            }
-        }
-      ];
+        ];
 
-      const systemInstruction = `You are a helpful AI assistant integrated into a CRM for a spray foam insulation company called "FOAM CRMAI".
+        const systemInstruction = `You are a helpful AI assistant integrated into a CRM for a spray foam insulation company called "FOAM CRMAI".
 Your primary role is to assist the user by executing functions to manage the application's state and navigate its pages.
+If an image of handwritten notes is provided, analyze it to extract customer information (name, address, phone, email) and job specifications (like building dimensions and foam thickness). First, call the 'addCustomer' function with the extracted customer details. Then, call the 'updateCalculator' function with the job specifications. Finally, navigate to the 'calculator' page to show the results and inform the user you have done so.
 The current date is ${new Date().toLocaleDateString()}.
 Do not ask for confirmation before calling a function. Call it directly with the information you have.
 If a customer name is mentioned, check if they exist in the provided customer list before deciding to add a new one.
@@ -265,136 +305,134 @@ Available customers:
 ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No customers in the system yet.'}
 `;
 
-      // FIX: Restructured the generateContent call to align with the Gemini API's requirements for multi-turn chat with a system instruction and function calling.
-      // System instructions are passed in the `config` object, and the chat history is formatted as an array of Content objects.
-      const chatHistory = messages.map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.text }],
-      }));
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [...chatHistory, { role: 'user', parts: [{ text: query }] }],
-        config: {
-          systemInstruction: systemInstruction,
-          tools: [{ functionDeclarations }]
-        }
-      });
-      
-      const functionCalls = response.candidates?.[0]?.content?.parts
-        .filter(part => part.functionCall)
-        .map(part => part.functionCall);
-
-      if (functionCalls && functionCalls.length > 0) {
-        const call = functionCalls[0];
-        
-        let functionResponse;
-
-        // FIX: Added type assertions to function call arguments to resolve 'unknown' type errors.
-        switch (call.name) {
-          case 'navigate':
-            const page = call.args?.page as Page;
-            if (page) {
-              setMainPage(page);
-              functionResponse = { name: call.name, response: { success: true, message: `Navigated to ${page}.` } };
-            } else {
-              functionResponse = { name: call.name, response: { success: false, message: 'Page not specified.' } };
+        const chatHistory = messages.map(msg => {
+            const parts: any[] = [];
+            if (msg.role === 'user' && msg.imagePartsForApi) {
+                parts.push(msg.imagePartsForApi);
             }
-            break;
-            
-          case 'addCustomer':
-            const newCustomer = await handleAddCustomer({
-              name: call.args.name as string,
-              address: call.args.address as string,
-              phone: call.args.phone as string,
-              email: call.args.email as string
-            });
-            functionResponse = { name: call.name, response: { success: true, message: `Added new customer: ${newCustomer.name} with ID ${newCustomer.id}.` } };
-            break;
-            
-          case 'startEstimate':
-            setMainPage('calculator');
-            setSelectedCustomerId(call.args.customerId as number || '');
-            functionResponse = { name: call.name, response: { success: true, message: `Starting estimate. Calculator is ready.` } };
-            break;
-            
-           case 'updateCalculator':
-             setCalculatorInputs(prev => ({ ...prev, ...(call.args as Partial<CalculatorInputs>) }));
-             setMainPage('calculator'); // Ensure the user sees the change
-             functionResponse = { name: call.name, response: { success: true, message: `Calculator updated.` } };
-             break;
-             
-           case 'getOnHandInventory':
-             functionResponse = { name: call.name, response: props.onHandInventory };
-             break;
-             
-           case 'updateOnHandInventory':
-             setOnHandInventory(prev => ({...prev, ...(call.args as Partial<CalculatorInputs>)}));
-             setMainPage('materialOrder');
-             functionResponse = { name: call.name, response: { success: true, message: 'Inventory updated.' } };
-             break;
-             
-           case 'scheduleJob':
-             const startDate = new Date((call.args.startDate as string).replace(/-/g, '/')); // Robust parsing
-             const endDate = addDays(startDate, (call.args.durationDays as number) - 1);
-             onAddCalendarJob({
-                 name: call.args.name as string,
-                 start: fmtInput(startDate),
-                 end: fmtInput(endDate),
-                 color: '#3498DB',
-                 links: [],
-             });
-             setMainPage('schedule');
-             functionResponse = { name: call.name, response: { success: true, message: `Scheduled "${call.args.name as string}" on the calendar.` } };
-             break;
-             
-           case 'findJob':
-             const keyword = (call.args.keyword as string).toLowerCase();
-             const foundJobs = calendarJobs.filter(j => j.name.toLowerCase().includes(keyword));
-             if (foundJobs.length > 0) {
-                 const jobList = foundJobs.map(j => `- "${j.name}" from ${j.start} to ${j.end}`).join('\n');
-                 functionResponse = { name: call.name, response: { success: true, jobs: jobList } };
-             } else {
-                 functionResponse = { name: call.name, response: { success: false, message: `No jobs found with the keyword "${keyword}".` } };
-             }
-             break;
+            if (msg.text) {
+                parts.push({ text: msg.text });
+            }
+            return {
+                role: msg.role === 'assistant' ? 'model' : 'user',
+                parts: parts,
+            };
+        });
 
-          default:
-            functionResponse = { name: call.name, response: { success: false, message: 'Unknown function.' } };
+        const currentUserParts: any[] = [];
+        if (imagePartForApi) {
+            currentUserParts.push(imagePartForApi);
         }
-        
-        // FIX: Restructured the follow-up generateContent call to correctly handle chat history, function calls, and tool responses.
-        const historyForFollowup = messages.map(msg => ({
-            role: msg.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: msg.text }],
-        }));
+        if (query) {
+            currentUserParts.push({ text: query });
+        }
 
-        const followupResponse = await ai.models.generateContent({
+        const initialResponse = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: [
-                ...historyForFollowup,
-                { role: 'user', parts: [{ text: query }] },
-                { role: 'model', parts: [{ functionCall: call }] },
-                { role: 'tool', parts: [{ functionResponse }] }
-            ],
+            contents: [...chatHistory, { role: 'user', parts: currentUserParts }],
             config: {
-              systemInstruction: systemInstruction,
-              tools: [{ functionDeclarations }]
+                systemInstruction: systemInstruction,
+                tools: [{ functionDeclarations }]
             }
         });
-        
-        setMessages(prev => [...prev, { role: 'assistant', text: followupResponse.text }]);
-        
-      } else {
-        // Standard text response
-        setMessages(prev => [...prev, { role: 'assistant', text: response.text }]);
-      }
+
+        const functionCalls = initialResponse.candidates?.[0]?.content?.parts
+            .filter(part => part.functionCall)
+            .map(part => part.functionCall);
+
+        if (functionCalls && functionCalls.length > 0) {
+            const toolResponses = await Promise.all(functionCalls.map(async (call) => {
+                let responseData;
+                switch (call.name) {
+                    case 'navigate':
+                        const page = call.args?.page as Page;
+                        if (page) {
+                            setMainPage(page);
+                            responseData = { success: true, message: `Navigated to ${page}.` };
+                        } else {
+                            responseData = { success: false, message: 'Page not specified.' };
+                        }
+                        break;
+                    case 'addCustomer':
+                        const newCustomer = await handleAddCustomer({
+                            name: call.args.name as string,
+                            address: call.args.address as string,
+                            phone: call.args.phone as string || '',
+                            email: call.args.email as string || ''
+                        });
+                        responseData = { success: true, customerId: newCustomer.id, message: `Added customer: ${newCustomer.name}.` };
+                        break;
+                    case 'startEstimate':
+                        setMainPage('calculator');
+                        setSelectedCustomerId(call.args.customerId as number || '');
+                        responseData = { success: true, message: 'Starting estimate.' };
+                        break;
+                    case 'updateCalculator':
+                        setCalculatorInputs(prev => ({ ...prev, ...(call.args as Partial<CalculatorInputs>) }));
+                        setMainPage('calculator');
+                        responseData = { success: true, message: 'Calculator updated.' };
+                        break;
+                    case 'getOnHandInventory':
+                        responseData = props.onHandInventory;
+                        break;
+                    case 'updateOnHandInventory':
+                        setOnHandInventory(prev => ({ ...prev, ...(call.args as Partial<OnHandInventory>) }));
+                        setMainPage('materialOrder');
+                        responseData = { success: true, message: 'Inventory updated.' };
+                        break;
+                    case 'scheduleJob':
+                        const startDate = new Date((call.args.startDate as string).replace(/-/g, '/'));
+                        const endDate = addDays(startDate, (call.args.durationDays as number) - 1);
+                        onAddCalendarJob({
+                            name: call.args.name as string,
+                            start: fmtInput(startDate),
+                            end: fmtInput(endDate),
+                            color: '#3498DB',
+                            links: [],
+                        });
+                        setMainPage('schedule');
+                        responseData = { success: true, message: `Scheduled "${call.args.name as string}".` };
+                        break;
+                    case 'findJob':
+                        const keyword = (call.args.keyword as string).toLowerCase();
+                        const foundJobs = calendarJobs.filter(j => j.name.toLowerCase().includes(keyword));
+                        if (foundJobs.length > 0) {
+                            const jobList = foundJobs.map(j => `- "${j.name}" from ${j.start} to ${j.end}`).join('\n');
+                            responseData = { success: true, jobs: jobList };
+                        } else {
+                            responseData = { success: false, message: `No jobs found with keyword "${keyword}".` };
+                        }
+                        break;
+                    default:
+                        responseData = { success: false, message: 'Unknown function.' };
+                }
+                return { functionResponse: { name: call.name, response: responseData } };
+            }));
+
+            const finalResponse = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [
+                    ...chatHistory,
+                    { role: 'user', parts: currentUserParts },
+                    { role: 'model', parts: initialResponse.candidates![0].content.parts },
+                    { role: 'tool', parts: toolResponses }
+                ],
+                config: {
+                    systemInstruction: systemInstruction,
+                    tools: [{ functionDeclarations }]
+                }
+            });
+
+            setMessages(prev => [...prev, { role: 'assistant', text: finalResponse.text }]);
+        } else {
+            setMessages(prev => [...prev, { role: 'assistant', text: initialResponse.text }]);
+        }
 
     } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I encountered an error. Please try again." }]);
+        console.error(err);
+        setMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I encountered an error. Please try again." }]);
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   };
 
@@ -417,14 +455,24 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
 
       {isOpen && (
         <div ref={chatWindowRef} className="fixed bottom-40 right-4 z-[9998] w-[90vw] max-w-sm h-[60vh] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 className="font-bold text-lg text-slate-900 dark:text-slate-50">FOAM CRMAI Assistant</h3>
+            <button
+                onClick={() => setIsOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-600"
+                aria-label="Close Assistant"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg, index) => (
               <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-xs md:max-w-sm rounded-2xl px-4 py-2 ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-bl-none'}`}>
-                  {msg.text}
+                  {msg.imageUrl && <img src={msg.imageUrl} alt="Uploaded content" className="max-w-full h-auto rounded-lg mb-2" />}
+                  {msg.text && <div>{msg.text}</div>}
                 </div>
               </div>
             ))}
@@ -441,8 +489,36 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
             )}
             <div ref={messagesEndRef} />
           </div>
+          {imagePreview && (
+            <div className="p-2 border-t border-slate-200 dark:border-slate-700">
+                <div className="relative inline-block">
+                    <img src={imagePreview} alt="Preview" className="max-h-24 rounded-lg" />
+                    <button
+                        onClick={removeImage}
+                        className="absolute top-0 right-0 -m-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-semibold"
+                        aria-label="Remove image"
+                    >
+                        &times;
+                    </button>
+                </div>
+            </div>
+          )}
           <div className="p-2 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <div className="flex items-center gap-2">
+              <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept="image/*"
+              />
+              <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600"
+                  aria-label="Attach an image"
+              >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+              </button>
               <button 
                 onClick={toggleListen}
                 className={`flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isListening ? 'bg-red-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
@@ -455,7 +531,7 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Ask me anything..."
+                placeholder="Ask or upload notes..."
                 className="w-full bg-slate-100 dark:bg-slate-700 border-transparent rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
               <button

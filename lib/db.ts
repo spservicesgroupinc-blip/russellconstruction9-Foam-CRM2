@@ -1,8 +1,7 @@
+
 import Dexie, { Table } from 'dexie';
-// FIX: Added .tsx extension to component imports
 import { CustomerInfo, Costs } from '../components/EstimatePDF.tsx';
 import { CalculationResults } from '../components/SprayFoamCalculator.tsx';
-// FIX: Added .ts extension to type import
 import { TimeEntry, Employee } from '../components/types.ts';
 
 export type JobStatus = 'estimate' | 'sold' | 'invoiced' | 'paid';
@@ -12,6 +11,7 @@ export interface EstimateRecord {
   customerId: number;
   estimatePdf: Blob;
   materialOrderPdf: Blob;
+  invoicePdf?: Blob;
   estimateNumber: string;
   calcData: Omit<CalculationResults, 'customer'> & { customer?: CustomerInfo };
   costsData: Costs;
@@ -38,8 +38,10 @@ export class AppDatabase extends Dexie {
 
   constructor() {
     super('foamCrmDatabase');
-    // FIX: Moved schema definition inside the constructor. This is the standard Dexie pattern and resolves the TypeScript error.
-    this.version(3).stores({
+    // FIX: Cast `this` to `Dexie` to resolve a TypeScript type error where the `version`
+    // method was not found on the subclass. This helps the type checker understand
+    // that the `AppDatabase` instance has all methods of a `Dexie` instance.
+    (this as Dexie).version(4).stores({
       customers: '++id, name, address',
       estimates: '++id, customerId, estimateNumber, status, createdAt',
       employees: '++id, name',

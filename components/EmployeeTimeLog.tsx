@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-// FIX: Added .ts extension for type and db imports
 import { Employee, TimeEntry } from './types.ts';
 import { db } from '../lib/db.ts';
 

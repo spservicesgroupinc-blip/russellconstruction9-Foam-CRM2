@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { CustomerInfo } from './EstimatePDF';
 
@@ -15,8 +16,6 @@ interface MapViewProps {
 
 const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  // FIX: Changed specific google.maps types to `any` to resolve TypeScript errors,
-  // as the Google Maps library is loaded dynamically.
   const [map, setMap] = useState<any | null>(null);
   const [infoWindow, setInfoWindow] = useState<any | null>(null);
   const markersRef = useRef<Map<number, any>>(new Map());
