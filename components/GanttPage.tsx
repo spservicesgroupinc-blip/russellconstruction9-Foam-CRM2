@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Job, EditingJob } from './types.ts';
+import { Job, EditingJob, Employee } from './types.ts';
 import { toDate, addDays, diffInDays, minDate, maxDate, getMidpointDate } from './utils.ts';
 import GanttChart from './GanttChart.tsx';
 import JobEditorModal from './JobEditorModal.tsx';
@@ -23,9 +23,10 @@ const useIsMobile = (breakpoint = 768): boolean => {
 interface GanttPageProps {
   jobs: Job[];
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
+  employees: Employee[];
 }
 
-const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs }) => {
+const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs, employees }) => {
   const [pxPerDay, setPxPerDay] = useState(40);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const isMobile = useIsMobile();
@@ -102,7 +103,7 @@ const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs }) => {
   }, [setJobs]);
   
   const handleSaveJob = useCallback((jobToSave: EditingJob) => {
-      const normalized: Job = { ...(jobToSave as Job), links: (jobToSave as any).links ?? [] };
+      const normalized: Job = { ...(jobToSave as Job), links: (jobToSave as any).links ?? [], assignedTeam: (jobToSave as any).assignedTeam ?? [] };
       setJobs(updatedJobs => updatedJobs.map((j) => (j.id === normalized.id ? normalized : j)));
       setEditingJobId(null);
   }, [setJobs]);
@@ -169,6 +170,7 @@ const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs }) => {
         <JobEditorModal
           job={editingJob}
           allJobs={jobs}
+          allEmployees={employees}
           onSave={handleSaveJob}
           onCancel={() => setEditingJobId(null)}
           onDelete={handleDeleteJob}

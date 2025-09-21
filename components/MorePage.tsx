@@ -1,11 +1,13 @@
+
 import React from 'react';
 import { Page } from '../App.tsx';
 
 interface MorePageProps {
   onNavigate: (page: Page) => void;
+  onLogout: () => void;
 }
 
-const MorePage: React.FC<MorePageProps> = ({ onNavigate }) => {
+const MorePage: React.FC<MorePageProps> = ({ onNavigate, onLogout }) => {
   const card = "rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm";
 
   interface ListItemProps {
@@ -55,6 +57,12 @@ const MorePage: React.FC<MorePageProps> = ({ onNavigate }) => {
             description="Manage employees and access their time logs."
           />
            <ListItem
+            page="timeclock"
+            icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+            title="Time Clock"
+            description="View team status and live locations on a map."
+          />
+           <ListItem
             page="materialOrder"
             icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>}
             title="Materials"
@@ -80,6 +88,22 @@ const MorePage: React.FC<MorePageProps> = ({ onNavigate }) => {
           />
         </div>
       </div>
+       <div className={`${card} mt-4`}>
+          <button
+            onClick={onLogout}
+            className="w-full text-left p-4 flex items-center gap-4 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
+          >
+            <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-300 rounded-lg">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-red-600 dark:text-red-400">Logout</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Sign out of the application.</p>
+            </div>
+          </button>
+        </div>
     </div>
   );
 };

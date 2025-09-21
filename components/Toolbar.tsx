@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ToolbarProps {
-  onAddJob: () => void;
+  onAddJob?: () => void;
   currentMonth: Date;
   onNextMonth: () => void;
   onPreviousMonth: () => void;
@@ -33,12 +33,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </div>
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 w-36 text-center sm:text-left">{monthYearLabel}</h2>
       </div>
-      <button
-        onClick={onAddJob}
-        className="w-full sm:w-auto rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-semibold shadow hover:bg-blue-700 transition-colors"
-      >
-        + Add Job
-      </button>
+      {onAddJob && (
+        <button
+            onClick={onAddJob}
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-semibold shadow hover:bg-blue-700 transition-colors"
+        >
+            + Add Job
+        </button>
+      )}
     </div>
   );
 };

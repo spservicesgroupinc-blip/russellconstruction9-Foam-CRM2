@@ -19,14 +19,19 @@ import MorePage from './components/MorePage.tsx';
 import TimeClockPage from './components/TimeClockPage.tsx';
 import InventoryPage from './components/InventoryPage.tsx';
 import QuickAddFAB from './components/QuickAddFAB.tsx';
+import LoginScreen from './components/LoginScreen.tsx';
+import Header from './components/Header.tsx';
+import EmployeeDashboard from './components/EmployeeDashboard.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
 import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
 import { Job, Employee } from './components/types.ts';
 
-export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory';
+export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
 
 export type Theme = 'light' | 'dark' | 'system';
+
+export type CurrentUser = { role: 'admin' } | { role: 'employee'; data: Employee } | null;
 
 export interface AppSettings {
   theme: Theme;
@@ -68,6 +73,7 @@ function isJobArray(obj: any): obj is Job[] {
 
 
 const App: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
   const [page, setPage] = useState<Page>('dashboard');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>({
@@ -137,25 +143,7 @@ const App: React.FC = () => {
         closedCellYield: parsedSettings.defaultYields.closedCellYield,
       }));
     } else {
-      // Create and save defaults if either company info or settings are missing
-      const defaultCompany: CompanyInfo = {
-        name: 'Default Spray Foam Co.',
-        address: '123 Main St, Anytown, USA 12345',
-        phone: '(555) 123-4567',
-        email: 'contact@defaultfoam.com',
-      };
-      const defaultSettings: AppSettings = {
-        theme: 'system',
-        defaultYields: { openCellYield: 16000, closedCellYield: 4000 },
-        defaultCosts: DEFAULT_COST_SETTINGS,
-      };
-      
-      localStorage.setItem('companyInfo', JSON.stringify(defaultCompany));
-      localStorage.setItem('appSettings', JSON.stringify(defaultSettings));
-      
-      setCompanyInfo(defaultCompany);
-      setAppSettings(defaultSettings);
-      setIsInitialSetup(false); // Ensure we don't show the setup screen
+      setIsInitialSetup(true);
     }
     
     const allCustomers = await db.customers.toArray();
@@ -195,7 +183,7 @@ const App: React.FC = () => {
     setAppSettings(settings);
     if (isInitialSetup) {
       setIsInitialSetup(false);
-      setPage('dashboard');
+      // Don't auto-navigate, let the user click the login button
     }
   };
 
@@ -288,17 +276,14 @@ const App: React.FC = () => {
         costsData: finalJobData.costsData,
         invoicePdf: invoicePdfBlob 
       });
-      // The local `currentJob` is already updated via handleUpdateJob's side effect
       setPage('jobDetail');
   };
-
 
   const handleScheduleJob = (job: EstimateRecord) => {
       setJobToSchedule(job);
       setPage('schedule');
   }
 
-  // Inventory Handlers
   const handleAddInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
     const newId = await db.inventory.add(item as InventoryItem);
     const newItem = { ...item, id: newId };
@@ -314,7 +299,6 @@ const App: React.FC = () => {
     await db.inventory.delete(itemId);
     setInventoryItems(prev => prev.filter(i => i.id !== itemId));
   };
-
 
   const resetCurrentJob = () => {
     setCurrentJob(null);
@@ -335,7 +319,6 @@ const App: React.FC = () => {
     setCalendarJobs(prev => prev.filter(j => j.id !== jobId));
   };
 
-  // FAB Handlers
   const handleFabNewEstimate = () => {
     setSelectedCustomerId('');
     resetCurrentJob();
@@ -347,13 +330,34 @@ const App: React.FC = () => {
     setIsAddCustomerModalOpen(true);
   };
 
+  const handleLogin = (user: CurrentUser) => {
+    setCurrentUser(user);
+    if (user?.role === 'employee') {
+      setPage('employeeDashboard');
+    } else {
+      setPage('dashboard');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setPage('dashboard'); // Reset to default
+  };
+
   const getActiveTab = (currentPage: Page): Page => {
+    if (currentUser?.role === 'employee') {
+      if (['employeeDashboard'].includes(currentPage)) return 'employeeDashboard';
+      if (['schedule'].includes(currentPage)) return 'schedule';
+      if (['timeclock'].includes(currentPage)) return 'timeclock';
+      return 'employeeDashboard'; // fallback for employee
+    }
+
+    // Admin Tabs
     if (['dashboard'].includes(currentPage)) return 'dashboard';
     if (['customers', 'customerDetail'].includes(currentPage)) return 'customers';
     if (['calculator', 'costing'].includes(currentPage)) return 'calculator';
     if (['schedule'].includes(currentPage)) return 'schedule';
-    if (['timeclock'].includes(currentPage)) return 'timeclock';
-    if (['more', 'jobsList', 'jobDetail', 'invoicing', 'team', 'settings', 'materialOrder', 'gantt', 'inventory'].includes(currentPage)) return 'more';
+    if (['more', 'jobsList', 'jobDetail', 'invoicing', 'team', 'settings', 'materialOrder', 'gantt', 'inventory', 'timeclock'].includes(currentPage)) return 'more';
     return 'dashboard'; // fallback
   }
   const activeTab = getActiveTab(page);
@@ -377,6 +381,18 @@ const App: React.FC = () => {
   );
 
   const renderPage = () => {
+    if (currentUser?.role === 'employee') {
+      switch (page) {
+        case 'employeeDashboard': return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} />;
+        case 'schedule': return <JobCalendar jobToSchedule={null} onJobScheduled={() => {}} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
+        case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} currentUser={currentUser.data} />;
+        default:
+          setPage('employeeDashboard'); // Redirect to a valid employee page
+          return null;
+      }
+    }
+
+    // Admin Pages
     switch (page) {
       case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} />;
       case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} />;
@@ -410,61 +426,81 @@ const App: React.FC = () => {
       case 'jobDetail': return currentJob && <JobDetail job={currentJob} customers={customers} employees={employees} onBack={() => { resetCurrentJob(); setPage('jobsList'); }} onUpdateJob={handleUpdateJob} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); }} onScheduleJob={handleScheduleJob} onViewCustomer={handleViewCustomer} />;
       case 'materialOrder': return <MaterialOrder soldJobData={soldJobData} onHandInventory={onHandInventory} setOnHandInventory={setOnHandInventory} />;
       case 'invoicing': return <Invoicing soldJobs={jobs.filter(j => j.status === 'sold' || j.status === 'invoiced')} customers={customers} companyInfo={companyInfo!} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); /* re-use for invoice editing */ }} />;
-      case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} />;
-      case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} />;
+      case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
+      // FIX: Pass employees prop to GanttPage
+      case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} />;
       case 'map': return <MapView customers={customers} onUpdateCustomer={handleUpdateCustomer} />;
       case 'team': return <TeamPage employees={employees} onAddEmployee={handleAddEmployee} jobs={jobs.filter(j => j.status === 'sold')} />;
       case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} />;
       case 'inventory': return <InventoryPage items={inventoryItems} onAddItem={handleAddInventoryItem} onUpdateItem={handleUpdateInventoryItem} onDeleteItem={handleDeleteInventoryItem} />;
       case 'settings': return <Settings onSave={handleSaveSettings} currentInfo={companyInfo} appSettings={appSettings} />;
-      case 'more': return <MorePage onNavigate={setPage} />;
+      case 'more': return <MorePage onNavigate={setPage} onLogout={handleLogout} />;
       default: return <div>Page not found</div>;
     }
   };
 
-  if (isInitialSetup || !companyInfo) {
+  if (isInitialSetup) {
     return <Settings onSave={handleSaveSettings} currentInfo={companyInfo} appSettings={appSettings} isInitialSetup />;
+  }
+  
+  if (!currentUser) {
+    return <LoginScreen employees={employees} onLogin={handleLogin} />;
   }
 
   return (
     <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 min-h-screen font-sans">
-      <div className="pb-24">
+      <Header 
+        user={{ name: currentUser.role === 'admin' ? 'Admin' : currentUser.data.name }}
+        onLogout={handleLogout}
+      />
+      <div className="pb-24 pt-16">
         {renderPage()}
       </div>
       
-      <QuickAddFAB 
-          onNewEstimate={handleFabNewEstimate}
-          onNewCustomer={handleFabNewCustomer}
-      />
+      {currentUser.role === 'admin' && (
+        <>
+            <QuickAddFAB 
+                onNewEstimate={handleFabNewEstimate}
+                onNewCustomer={handleFabNewCustomer}
+            />
 
-      <GeminiAgent 
-         setMainPage={setPage}
-         customers={customers}
-         handleAddCustomer={handleAddCustomer}
-         handleUpdateCustomer={handleUpdateCustomer}
-         setSelectedCustomerId={setSelectedCustomerId}
-         calculatorInputs={calculatorInputs}
-         setCalculatorInputs={setCalculatorInputs}
-         onHandInventory={onHandInventory}
-         setOnHandInventory={setOnHandInventory}
-         handleJobSold={handleJobSold}
-         companyInfo={companyInfo}
-         calendarJobs={calendarJobs}
-         onAddCalendarJob={addCalendarJob}
-         onUpdateCalendarJob={updateCalendarJob}
-         onDeleteCalendarJob={deleteCalendarJob}
-         appSettings={appSettings}
-      />
+            <GeminiAgent 
+                setMainPage={setPage}
+                customers={customers}
+                handleAddCustomer={handleAddCustomer}
+                handleUpdateCustomer={handleUpdateCustomer}
+                setSelectedCustomerId={setSelectedCustomerId}
+                calculatorInputs={calculatorInputs}
+                setCalculatorInputs={setCalculatorInputs}
+                onHandInventory={onHandInventory}
+                setOnHandInventory={setOnHandInventory}
+                handleJobSold={handleJobSold}
+                companyInfo={companyInfo!}
+                calendarJobs={calendarJobs}
+                onAddCalendarJob={addCalendarJob}
+                onUpdateCalendarJob={updateCalendarJob}
+                onDeleteCalendarJob={deleteCalendarJob}
+                appSettings={appSettings}
+            />
+        </>
+      )}
       
       <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-2 z-[9998]">
-        <div className="grid grid-cols-6 max-w-2xl mx-auto gap-1">
-            <NavButton target="dashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
-            <NavButton target="customers" label="Clients" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.124-1.282-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.124-1.282.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
-            <NavButton target="calculator" label="Estimate" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} />
-            <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
-            <NavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-            <NavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
-        </div>
+        {currentUser.role === 'admin' ? (
+            <div className="grid grid-cols-5 max-w-2xl mx-auto gap-1">
+                <NavButton target="dashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
+                <NavButton target="customers" label="Clients" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.124-1.282-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.124-1.282.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
+                <NavButton target="calculator" label="Estimate" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} />
+                <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+                <NavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
+            </div>
+        ) : (
+            <div className="grid grid-cols-3 max-w-sm mx-auto gap-1">
+                 <NavButton target="employeeDashboard" label="Dashboard" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
+                 <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+                 <NavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+            </div>
+        )}
       </div>
 
       {isAddCustomerModalOpen && (

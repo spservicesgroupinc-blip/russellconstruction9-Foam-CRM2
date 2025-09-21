@@ -5,6 +5,7 @@ export interface Job {
     end: string; // "YYYY-MM-DD"
     color: string;
     links: string[];
+    assignedTeam?: number[];
 }
 
 export interface EditingJob extends Partial<Job> {

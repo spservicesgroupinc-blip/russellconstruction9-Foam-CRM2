@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { EditingJob, Job } from './types.ts';
+import { EditingJob, Job, Employee } from './types.ts';
 import { fmtInput, toDate, addDays } from './utils.ts';
 
 interface JobEditorModalProps {
   job: EditingJob;
   allJobs: Job[];
+  allEmployees: Employee[];
   onSave: (job: EditingJob) => void;
   onCancel: () => void;
   onDelete: (id: string) => void;
   onMakeStandalone: (id: string) => void;
 }
 
-const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, onCancel, onDelete, onMakeStandalone }) => {
-  // Ensure the job being edited always has a links array to prevent uncontrolled->controlled input errors.
-  const [editedJob, setEditedJob] = useState<EditingJob>({ ...job, links: job.links ?? [] });
+const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, allEmployees, onSave, onCancel, onDelete, onMakeStandalone }) => {
+  // Ensure the job being edited always has a links array and assignedTeam to prevent uncontrolled->controlled input errors.
+  const [editedJob, setEditedJob] = useState<EditingJob>({ ...job, links: job.links ?? [], assignedTeam: job.assignedTeam ?? [] });
 
   useEffect(() => {
-    // Sync with prop changes, also ensuring links is always an array.
-    setEditedJob({ ...job, links: job.links ?? [] });
+    // Sync with prop changes, also ensuring arrays are initialized.
+    setEditedJob({ ...job, links: job.links ?? [], assignedTeam: job.assignedTeam ?? [] });
   }, [job]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -29,11 +30,23 @@ const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, o
        setEditedJob(prev => ({ ...prev, [name]: value }));
     }
   };
+  
+  const handleTeamChange = (employeeId: number) => {
+    setEditedJob(prev => {
+        const currentTeam = prev.assignedTeam || [];
+        const isAssigned = currentTeam.includes(employeeId);
+        if (isAssigned) {
+            return { ...prev, assignedTeam: currentTeam.filter(id => id !== employeeId) };
+        } else {
+            return { ...prev, assignedTeam: [...currentTeam, employeeId] };
+        }
+    });
+  };
 
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newStart = toDate(e.target.value);
-    const oldStart = toDate(editedJob.start);
-    const oldEnd = toDate(editedJob.end);
+    const oldStart = toDate(editedJob.start!);
+    const oldEnd = toDate(editedJob.end!);
     const duration = Math.max(0, (oldEnd.getTime() - oldStart.getTime()));
     const newEnd = new Date(newStart.getTime() + duration);
     setEditedJob(prev => ({
@@ -46,7 +59,7 @@ const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, o
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     // Basic validation to ensure end date is not before start date
-    if (toDate(editedJob.end) < toDate(editedJob.start)) {
+    if (toDate(editedJob.end!) < toDate(editedJob.start!)) {
         alert("End date cannot be before the start date.");
         return;
     }
@@ -70,7 +83,7 @@ const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, o
         </button>
         <form onSubmit={handleSave}>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Edit Job</h2>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
             <label className="block">
                 <span className={label}>Job Name</span>
                 <input type="text" name="name" value={editedJob.name} onChange={handleChange} className={input} required />
@@ -84,6 +97,22 @@ const JobEditorModal: React.FC<JobEditorModalProps> = ({ job, allJobs, onSave, o
                     <span className={label}>End Date</span>
                     <input type="date" name="end" value={editedJob.end} onChange={handleChange} className={input} />
                 </label>
+            </div>
+             <div className="block">
+                <span className={label}>Assigned Team</span>
+                <div className="mt-2 grid grid-cols-2 gap-2 p-2 border rounded-lg max-h-32 overflow-y-auto border-slate-300 dark:border-slate-500">
+                    {allEmployees.map(emp => (
+                        <label key={emp.id} className="flex items-center gap-2 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={(editedJob.assignedTeam || []).includes(emp.id!)}
+                                onChange={() => handleTeamChange(emp.id!)}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm">{emp.name}</span>
+                        </label>
+                    ))}
+                </div>
             </div>
             <label className="block">
                 <span className={label}>Color</span>

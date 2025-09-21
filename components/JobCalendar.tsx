@@ -1,18 +1,21 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Job, EditingJob } from './types.ts';
+import { Job, EditingJob, Employee } from './types.ts';
 import { toDate, addDays, diffInDays, fmtInput, startOfDay } from './utils.ts';
 import Toolbar from './Toolbar.tsx';
 import JobEditorModal from './JobEditorModal.tsx';
 import { EstimateRecord } from '../lib/db.ts';
+import { CurrentUser } from '../App.tsx';
 
 interface JobCalendarProps {
   jobToSchedule: EstimateRecord | null;
   onJobScheduled: () => void;
   jobs: Job[];
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
+  employees: Employee[];
+  currentUser: CurrentUser;
 }
 
-const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled, jobs, setJobs }) => {
+const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled, jobs, setJobs, employees, currentUser }) => {
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -35,6 +38,7 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
           end: fmtInput(end),
           color: '#4A90E2',
           links: [],
+          assignedTeam: [],
         };
         return [...prevJobs, newJob];
       });
@@ -56,6 +60,7 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
       end: fmtInput(addDays(start, 2)),
       color: '#4A90E2',
       links: [],
+      assignedTeam: [],
     };
     setJobs((prev) => [...prev, newJob]);
     setEditingJobId(newId);
@@ -63,13 +68,13 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
   
   // Simplified update handler for the calendar view
   const handleUpdateJob = useCallback((updatedJob: Job, originalStartStr?: string) => {
-    setJobs(currentJobs => currentJobs.map(j => (j.id === updatedJob.id ? { ...updatedJob, links: updatedJob.links ?? [] } : j)));
+    setJobs(currentJobs => currentJobs.map(j => (j.id === updatedJob.id ? { ...updatedJob, links: updatedJob.links ?? [], assignedTeam: updatedJob.assignedTeam ?? [] } : j)));
   }, [setJobs]);
 
   const handleSaveJob = useCallback(
     (jobToSave: EditingJob) => {
       // normalize links to avoid .map on undefined later
-      const normalized: Job = { ...(jobToSave as Job), links: (jobToSave as any).links ?? [] };
+      const normalized: Job = { ...(jobToSave as Job), links: (jobToSave as any).links ?? [], assignedTeam: (jobToSave as any).assignedTeam ?? [] };
       setJobs(updatedJobs => updatedJobs.map((j) => (j.id === normalized.id ? normalized : j)));
       setEditingJobId(null);
     },
@@ -136,6 +141,10 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
     e.preventDefault(); // Necessary to allow dropping
   };
 
+  const getInitials = (name: string = '') => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  }
+
   const DayOfWeekHeader = () => (
     <div className="grid grid-cols-7 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 border-b border-l border-slate-200 dark:border-slate-600 sticky top-0 bg-white dark:bg-slate-700 z-10">
       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -147,7 +156,7 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
   return (
     <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-800">
       <Toolbar
-        onAddJob={() => handleAddJob()}
+        onAddJob={currentUser?.role === 'admin' ? () => handleAddJob() : undefined}
         currentMonth={currentMonth}
         onNextMonth={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
         onPreviousMonth={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
@@ -173,30 +182,43 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
                             return (
                                 <div 
                                     key={index}
-                                    className={`relative border-r border-b border-slate-200 dark:border-slate-600 p-2 min-h-[100px] ${isCurrentMonth ? 'bg-white dark:bg-slate-700 hover:bg-blue-50/70 dark:hover:bg-slate-600/50 cursor-pointer' : 'bg-slate-50 dark:bg-slate-700/50'} flex flex-col gap-1 transition-colors`}
-                                    onDrop={(e) => handleDrop(e, day)}
-                                    onDragOver={handleDragOver}
-                                    onClick={() => handleAddJob(day)}
+                                    className={`relative border-r border-b border-slate-200 dark:border-slate-600 p-2 min-h-[100px] ${isCurrentMonth ? 'bg-white dark:bg-slate-700' : 'bg-slate-50 dark:bg-slate-700/50'} flex flex-col gap-1 transition-colors`}
+                                    onDrop={(e) => currentUser?.role === 'admin' && handleDrop(e, day)}
+                                    onDragOver={currentUser?.role === 'admin' ? handleDragOver : undefined}
+                                    onClick={currentUser?.role === 'admin' ? () => handleAddJob(day) : undefined}
                                 >
                                     <span className={`text-xs font-semibold ${isToday ? 'bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center' : isCurrentMonth ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'}`}>
                                         {day.getDate()}
                                     </span>
                                     <div className="space-y-1 overflow-y-auto text-xs">
-                                        {jobsForDay.map(job => (
-                                            <div
-                                                key={job.id}
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, job)}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditingJobId(job.id);
-                                                }}
-                                                className="p-1 rounded text-white font-semibold truncate cursor-pointer hover:opacity-80"
-                                                style={{ backgroundColor: job.color }}
-                                            >
-                                                {job.name}
-                                            </div>
-                                        ))}
+                                        {jobsForDay.map(job => {
+                                            const isDraggable = currentUser?.role === 'admin';
+                                            const isAssignedToCurrentUser = currentUser?.role === 'employee' && (job.assignedTeam || []).includes(currentUser.data.id!);
+                                            const teamInitials = (job.assignedTeam || [])
+                                                .map(id => employees.find(e => e.id === id)?.name)
+                                                .filter(Boolean)
+                                                .map(name => getInitials(name!))
+                                                .join(', ');
+
+                                            return (
+                                                <div
+                                                    key={job.id}
+                                                    draggable={isDraggable}
+                                                    onDragStart={isDraggable ? (e) => handleDragStart(e, job) : undefined}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (isDraggable) setEditingJobId(job.id);
+                                                    }}
+                                                    className={`p-1.5 rounded text-white font-semibold truncate relative ${isDraggable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'} ${isAssignedToCurrentUser ? 'ring-2 ring-offset-2 ring-blue-500' : ''}`}
+                                                    style={{ backgroundColor: job.color }}
+                                                >
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="truncate">{job.name}</span>
+                                                        {teamInitials && <span className="flex-shrink-0 ml-2 text-xs opacity-80 bg-black/20 px-1 rounded">{teamInitials}</span>}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             )
@@ -206,10 +228,11 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
             </div>
         </div>
       </div>
-      {editingJob && (
+      {editingJob && currentUser?.role === 'admin' && (
         <JobEditorModal
           job={editingJob}
           allJobs={jobs}
+          allEmployees={employees}
           onSave={handleSaveJob}
           onCancel={() => setEditingJobId(null)}
           onDelete={handleDeleteJob}
