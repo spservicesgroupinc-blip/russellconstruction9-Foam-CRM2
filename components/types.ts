@@ -31,3 +31,14 @@ export interface TimeEntry {
     endLng?: number;
     durationHours?: number;
 }
+
+export interface Task {
+    id?: number;
+    title: string;
+    description?: string;
+    dueDate?: string; // YYYY-MM-DD
+    completed: boolean;
+    assignedTo: number[]; // empty array means for all admins/unassigned
+    createdAt: string; // ISO string
+    completedAt?: string; // ISO string
+}

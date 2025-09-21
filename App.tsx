@@ -25,7 +25,7 @@ import EmployeeDashboard from './components/EmployeeDashboard.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
 import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
-import { Job, Employee } from './components/types.ts';
+import { Job, Employee, Task } from './components/types.ts';
 
 export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
 
@@ -86,6 +86,7 @@ const App: React.FC = () => {
   const [jobs, setJobs] = useState<EstimateRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [calculatorInputs, setCalculatorInputs] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [calculationResults, setCalculationResults] = useState<CalculationResults | null>(null);
@@ -154,6 +155,8 @@ const App: React.FC = () => {
     setEmployees(allEmployees);
     const allItems = await db.inventory.toArray();
     setInventoryItems(allItems);
+    const allTasks = await db.tasks.orderBy('createdAt').reverse().toArray();
+    setTasks(allTasks);
   }, []);
 
 
@@ -344,6 +347,40 @@ const App: React.FC = () => {
     setPage('dashboard'); // Reset to default
   };
 
+  // Task Handlers
+    const handleAddTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => {
+        const newTask: Omit<Task, 'id'> = {
+            ...task,
+            completed: false,
+            createdAt: new Date().toISOString(),
+        };
+        const newId = await db.tasks.add(newTask as Task);
+        const addedTask = { ...newTask, id: newId };
+        setTasks(prev => [addedTask, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    };
+
+    const handleUpdateTask = async (task: Task) => {
+        await db.tasks.put(task);
+        setTasks(prev => prev.map(t => t.id === task.id ? task : t));
+    };
+
+    const handleDeleteTask = async (taskId: number) => {
+        await db.tasks.delete(taskId);
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+    };
+
+    const handleToggleTaskCompletion = async (taskId: number) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+            const updatedTask = {
+                ...task,
+                completed: !task.completed,
+                completedAt: !task.completed ? new Date().toISOString() : undefined
+            };
+            await handleUpdateTask(updatedTask);
+        }
+    };
+
   const getActiveTab = (currentPage: Page): Page => {
     if (currentUser?.role === 'employee') {
       if (['employeeDashboard'].includes(currentPage)) return 'employeeDashboard';
@@ -383,7 +420,7 @@ const App: React.FC = () => {
   const renderPage = () => {
     if (currentUser?.role === 'employee') {
       switch (page) {
-        case 'employeeDashboard': return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} />;
+        case 'employeeDashboard': return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} tasks={tasks} onToggleTaskCompletion={handleToggleTaskCompletion} />;
         case 'schedule': return <JobCalendar jobToSchedule={null} onJobScheduled={() => {}} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
         case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} currentUser={currentUser.data} />;
         default:
@@ -394,7 +431,7 @@ const App: React.FC = () => {
 
     // Admin Pages
     switch (page) {
-      case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} />;
+      case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
       case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} />;
       case 'costing': 
         if (currentJob) { // Invoice mode from an existing job
