@@ -4,6 +4,7 @@ import { calculateResults } from '../lib/processing.ts';
 import { InventoryItem } from '../lib/db.ts';
 
 export type FoamType = 'open-cell' | 'closed-cell';
+export type CalculatorType = 'building' | 'walls' | 'flat-area' | 'custom';
 
 export interface AdditionalSection {
   id: number;
@@ -46,10 +47,12 @@ export interface CalculationResults {
 
 // Interface for the props that control the calculator's state
 export interface CalculatorInputs {
+  calculatorType: CalculatorType;
   length: number;
   width: number;
   wallHeight: number;
   pitchInput: string;
+  totalWallLength: number;
   includeGableTriangles: boolean;
   wallFoamType: FoamType;
   wallThicknessIn: number;
@@ -79,6 +82,7 @@ interface SprayFoamCalculatorProps {
   setCalculatorInputs: React.Dispatch<React.SetStateAction<CalculatorInputs>>;
   defaultYields: { openCellYield: number, closedCellYield: number };
   inventoryItems: InventoryItem[];
+  defaultCalculatorInputs: CalculatorInputs;
 }
 
 export default function SprayFoamCalculator({ 
@@ -90,7 +94,8 @@ export default function SprayFoamCalculator({
   calculatorInputs,
   setCalculatorInputs,
   defaultYields,
-  inventoryItems
+  inventoryItems,
+  defaultCalculatorInputs
 }: SprayFoamCalculatorProps) {
 
   
@@ -110,7 +115,7 @@ export default function SprayFoamCalculator({
   const handleInputChange = (field: keyof Omit<CalculatorInputs, 'additionalSections' | 'inventoryLineItems'>, value: any) => {
     const numericFields: (keyof CalculatorInputs)[] = [
       'length', 'width', 'wallHeight', 'wallThicknessIn', 'wallWastePct',
-      'roofThicknessIn', 'roofWastePct', 'openCellYield', 'closedCellYield'
+      'roofThicknessIn', 'roofWastePct', 'openCellYield', 'closedCellYield', 'totalWallLength'
     ];
     if (numericFields.includes(field)) {
       value = parseFloat(value) || 0;
@@ -118,6 +123,19 @@ export default function SprayFoamCalculator({
     setCalculatorInputs(prev => ({ ...prev, [field]: value }));
   };
   
+  const handleCalculatorTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newType = e.target.value as CalculatorInputs['calculatorType'];
+    setCalculatorInputs(prev => ({
+        ...defaultCalculatorInputs,
+        // Persist important fields across type changes
+        inventoryLineItems: prev.inventoryLineItems,
+        openCellYield: prev.openCellYield,
+        closedCellYield: prev.closedCellYield,
+        // Set the new type
+        calculatorType: newType,
+    }));
+  };
+
   const handleAddSection = () => {
     setCalculatorInputs(prev => ({
         ...prev,
@@ -228,59 +246,118 @@ export default function SprayFoamCalculator({
   const input = "mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white";
   const small = "text-xs text-slate-500 dark:text-slate-400";
   const select = `${input} appearance-none`;
+  
+  const showRoofSettings = ['building', 'custom'].includes(calculatorInputs.calculatorType);
+  const showWallSettings = ['building', 'walls', 'custom'].includes(calculatorInputs.calculatorType);
 
   return (
     <>
     <div className="mx-auto max-w-3xl p-4 space-y-4">
        <div className={`${card} p-6`}>
-          <label className="block">
-            <span className={label}>Select Customer (Optional)</span>
-            <select
-              className={select}
-              value={selectedCustomerId}
-              onChange={(e) => {
-                if (e.target.value === '__add_new__') setIsAddCustomerModalOpen(true);
-                else setSelectedCustomerId(e.target.value ? Number(e.target.value) : '')
-              }}
-            >
-              <option value="">-- New / Walk-in Customer --</option>
-              {customers.map(customer => (<option key={customer.id} value={customer.id}>{customer.name}</option>))}
-              <option value="__add_new__" className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/50 dark:text-blue-300">+ Add New Customer...</option>
-            </select>
-          </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block">
+                    <span className={label}>Calculator Type</span>
+                    <select className={select} value={calculatorInputs.calculatorType} onChange={handleCalculatorTypeChange}>
+                        <option value="building">Building with Roof</option>
+                        <option value="walls">Walls Only</option>
+                        <option value="flat-area">Flat Area (Attic/Slab)</option>
+                        <option value="custom">Custom Areas</option>
+                    </select>
+                </label>
+                <label className="block">
+                    <span className={label}>Select Customer (Optional)</span>
+                    <select
+                    className={select}
+                    value={selectedCustomerId}
+                    onChange={(e) => {
+                        if (e.target.value === '__add_new__') setIsAddCustomerModalOpen(true);
+                        else setSelectedCustomerId(e.target.value ? Number(e.target.value) : '')
+                    }}
+                    >
+                    <option value="">-- New / Walk-in Customer --</option>
+                    {customers.map(customer => (<option key={customer.id} value={customer.id}>{customer.name}</option>))}
+                    <option value="__add_new__" className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/50 dark:text-blue-300">+ Add New Customer...</option>
+                    </select>
+                </label>
+            </div>
         </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className={card + " p-6"}>
-          <h2 className={h2}>Main Building Dimensions</h2>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <label className="block"><span className={label}>Length (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.length} onChange={(e) => handleInputChange('length', e.target.value)} /></label>
-            <label className="block"><span className={label}>Width (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.width} onChange={(e) => handleInputChange('width', e.target.value)} /></label>
-            <label className="block"><span className={label}>Wall Height (ft)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.wallHeight} onChange={(e) => handleInputChange('wallHeight', e.target.value)} /></label>
-            <label className="block"><span className={label}>Roof Pitch</span><input type="text" className={input} value={calculatorInputs.pitchInput} onChange={(e) => handleInputChange('pitchInput', e.target.value)} placeholder="e.g., 4/12 or 18°" /><span className={small}>e.g. 4/12, 18deg</span></label>
-            <label className="col-span-2 mt-2 inline-flex items-center gap-2"><input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={calculatorInputs.includeGableTriangles} onChange={(e) => handleInputChange('includeGableTriangles', e.target.checked)} /><span className="text-sm">Include gable-end triangles</span></label>
-          </div>
+           {calculatorInputs.calculatorType === 'building' && (
+                <>
+                    <h2 className={h2}>Main Building Dimensions</h2>
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                        <label className="block"><span className={label}>Length (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.length} onChange={(e) => handleInputChange('length', e.target.value)} /></label>
+                        <label className="block"><span className={label}>Width (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.width} onChange={(e) => handleInputChange('width', e.target.value)} /></label>
+                        <label className="block"><span className={label}>Wall Height (ft)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.wallHeight} onChange={(e) => handleInputChange('wallHeight', e.target.value)} /></label>
+                        <label className="block"><span className={label}>Roof Pitch</span><input type="text" className={input} value={calculatorInputs.pitchInput} onChange={(e) => handleInputChange('pitchInput', e.target.value)} placeholder="e.g., 4/12 or 18°" /><span className={small}>e.g. 4/12, 18deg</span></label>
+                        <label className="col-span-2 mt-2 inline-flex items-center gap-2"><input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={calculatorInputs.includeGableTriangles} onChange={(e) => handleInputChange('includeGableTriangles', e.target.checked)} /><span className="text-sm">Include gable-end triangles</span></label>
+                    </div>
+                </>
+           )}
+           {calculatorInputs.calculatorType === 'walls' && (
+                <>
+                    <h2 className={h2}>Wall Dimensions</h2>
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                        <label className="block col-span-2"><span className={label}>Total Wall Length (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.totalWallLength} onChange={(e) => handleInputChange('totalWallLength', e.target.value)} /></label>
+                        <label className="block col-span-2"><span className={label}>Average Wall Height (ft)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.wallHeight} onChange={(e) => handleInputChange('wallHeight', e.target.value)} /></label>
+                    </div>
+                </>
+           )}
+           {calculatorInputs.calculatorType === 'flat-area' && (
+                <>
+                    <h2 className={h2}>Flat Area Dimensions</h2>
+                    <p className={small + " -mt-1"}>For attic floors, slabs, flat roofs, etc.</p>
+                    <div className="mt-4 grid grid-cols-2 gap-4">
+                        <label className="block"><span className={label}>Length (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.length} onChange={(e) => handleInputChange('length', e.target.value)} /></label>
+                        <label className="block"><span className={label}>Width (ft)</span><input type="number" min={0} step={2.5} className={input} value={calculatorInputs.width} onChange={(e) => handleInputChange('width', e.target.value)} /></label>
+                    </div>
+                </>
+           )}
+           {calculatorInputs.calculatorType === 'custom' && (
+                <div className="text-center p-6 bg-slate-50 dark:bg-slate-600/30 rounded-lg">
+                    <h2 className={h2}>Custom Calculation</h2>
+                    <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                        This mode calculates totals based only on the sections you add below. Use the "Additional Areas" section to build your estimate piece by piece.
+                    </p>
+                </div>
+           )}
         </div>
 
         <div className={card + " p-6"}>
           <h2 className={h2}>Production Settings</h2>
           <div className="mt-4 space-y-4">
-            <div>
-              <h3 className="font-medium text-slate-800 dark:text-slate-200">Walls</h3>
-              <div className="mt-2 grid grid-cols-2 gap-4">
-                 <label className="block col-span-2"><span className={label}>Foam Type</span><select className={select} value={calculatorInputs.wallFoamType} onChange={(e) => handleInputChange('wallFoamType', e.target.value)}><option value="open-cell">Open-cell</option><option value="closed-cell">Closed-cell</option></select></label>
-                <label className="block"><span className={label}>Thickness (in)</span><input type="number" min={0} step={0.5} className={input} value={calculatorInputs.wallThicknessIn} onChange={(e) => handleInputChange('wallThicknessIn', e.target.value)} /></label>
-                <label className="block"><span className={label}>Waste (%)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.wallWastePct} onChange={(e) => handleInputChange('wallWastePct', e.target.value)} /></label>
-              </div>
-            </div>
-            <div className="border-t border-slate-200 dark:border-slate-600 pt-4">
-              <h3 className="font-medium text-slate-800 dark:text-slate-200">Roof</h3>
-              <div className="mt-2 grid grid-cols-2 gap-4">
-                <label className="block col-span-2"><span className={label}>Foam Type</span><select className={select} value={calculatorInputs.roofFoamType} onChange={(e) => handleInputChange('roofFoamType', e.target.value)}><option value="open-cell">Open-cell</option><option value="closed-cell">Closed-cell</option></select></label>
-                <label className="block"><span className={label}>Thickness (in)</span><input type="number" min={0} step={0.5} className={input} value={calculatorInputs.roofThicknessIn} onChange={(e) => handleInputChange('roofThicknessIn', e.target.value)} /></label>
-                <label className="block"><span className={label}>Waste (%)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.roofWastePct} onChange={(e) => handleInputChange('roofWastePct', e.target.value)} /></label>
-              </div>
-            </div>
+            {showWallSettings && (
+                <div>
+                  <h3 className="font-medium text-slate-800 dark:text-slate-200">Walls</h3>
+                  <div className="mt-2 grid grid-cols-2 gap-4">
+                     <label className="block col-span-2"><span className={label}>Foam Type</span><select className={select} value={calculatorInputs.wallFoamType} onChange={(e) => handleInputChange('wallFoamType', e.target.value)}><option value="open-cell">Open-cell</option><option value="closed-cell">Closed-cell</option></select></label>
+                    <label className="block"><span className={label}>Thickness (in)</span><input type="number" min={0} step={0.5} className={input} value={calculatorInputs.wallThicknessIn} onChange={(e) => handleInputChange('wallThicknessIn', e.target.value)} /></label>
+                    <label className="block"><span className={label}>Waste (%)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.wallWastePct} onChange={(e) => handleInputChange('wallWastePct', e.target.value)} /></label>
+                  </div>
+                </div>
+            )}
+            {showRoofSettings && (
+                <div className={`${showWallSettings ? 'border-t border-slate-200 dark:border-slate-600 pt-4' : ''}`}>
+                  <h3 className="font-medium text-slate-800 dark:text-slate-200">Roof / Ceilings</h3>
+                  <div className="mt-2 grid grid-cols-2 gap-4">
+                    <label className="block col-span-2"><span className={label}>Foam Type</span><select className={select} value={calculatorInputs.roofFoamType} onChange={(e) => handleInputChange('roofFoamType', e.target.value)}><option value="open-cell">Open-cell</option><option value="closed-cell">Closed-cell</option></select></label>
+                    <label className="block"><span className={label}>Thickness (in)</span><input type="number" min={0} step={0.5} className={input} value={calculatorInputs.roofThicknessIn} onChange={(e) => handleInputChange('roofThicknessIn', e.target.value)} /></label>
+                    <label className="block"><span className={label}>Waste (%)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.roofWastePct} onChange={(e) => handleInputChange('roofWastePct', e.target.value)} /></label>
+                  </div>
+                </div>
+            )}
+            {calculatorInputs.calculatorType === 'flat-area' && (
+                <div>
+                  <h3 className="font-medium text-slate-800 dark:text-slate-200">Foam Application</h3>
+                  <div className="mt-2 grid grid-cols-2 gap-4">
+                    <label className="block col-span-2"><span className={label}>Foam Type</span><select className={select} value={calculatorInputs.roofFoamType} onChange={(e) => handleInputChange('roofFoamType', e.target.value)}><option value="open-cell">Open-cell</option><option value="closed-cell">Closed-cell</option></select></label>
+                    <label className="block"><span className={label}>Thickness (in)</span><input type="number" min={0} step={0.5} className={input} value={calculatorInputs.roofThicknessIn} onChange={(e) => handleInputChange('roofThicknessIn', e.target.value)} /></label>
+                    <label className="block"><span className={label}>Waste (%)</span><input type="number" min={0} step={1} className={input} value={calculatorInputs.roofWastePct} onChange={(e) => handleInputChange('roofWastePct', e.target.value)} /></label>
+                  </div>
+                </div>
+            )}
             <div className="border-t border-slate-200 dark:border-slate-600 pt-4">
               <h3 className="font-medium text-slate-800 dark:text-slate-200">Material Yields</h3>
               <div className="mt-2 grid grid-cols-2 gap-4">
@@ -376,9 +453,9 @@ export default function SprayFoamCalculator({
 
         <div className="mt-6 flex flex-col-reverse gap-3">
           <button onClick={copyResults} className="w-full rounded-lg bg-slate-200 dark:bg-slate-600 px-4 py-2.5 text-slate-800 dark:text-slate-100 font-medium shadow-sm hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors">Copy Details</button>
-          <button onClick={handleProceedToCosting} disabled={!calc.pitchValid && calculatorInputs.length > 0 && calculatorInputs.width > 0} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-semibold shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-500 transition-colors">Proceed to Job Costing</button>
+          <button onClick={handleProceedToCosting} disabled={!calc.pitchValid && calculatorInputs.calculatorType === 'building'} className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-white font-semibold shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400 dark:disabled:bg-slate-500 transition-colors">Proceed to Job Costing</button>
         </div>
-        {!calc.pitchValid && calculatorInputs.length > 0 && calculatorInputs.width > 0 && (<div className="mt-3 w-full rounded-lg bg-red-100 dark:bg-red-900/40 px-3 py-2 text-sm text-red-700 dark:text-red-200">Enter a valid roof pitch for the main building to proceed</div>)}
+        {!calc.pitchValid && calculatorInputs.calculatorType === 'building' && (<div className="mt-3 w-full rounded-lg bg-red-100 dark:bg-red-900/40 px-3 py-2 text-sm text-red-700 dark:text-red-200">Enter a valid roof pitch for the main building to proceed</div>)}
 
         <details className="mt-6 group">
           <summary className="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white list-none">

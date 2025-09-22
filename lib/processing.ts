@@ -44,41 +44,65 @@ function clamp(n: number, min: number, max: number) {
 
 export function calculateResults(inputs: CalculatorInputs): Omit<CalculationResults, 'customer'> {
   const { 
-    length, width, wallHeight, pitchInput, includeGableTriangles, 
+    calculatorType, length, width, wallHeight, pitchInput, includeGableTriangles, 
+    totalWallLength,
     wallFoamType, wallThicknessIn, wallWastePct, 
     roofFoamType, roofThicknessIn, roofWastePct, 
     openCellYield, closedCellYield,
     additionalSections, inventoryLineItems
   } = inputs;
-
-  const L = Math.max(0, Number(length));
-  const W = Math.max(0, Number(width));
-  const H = Math.max(0, Number(wallHeight));
-  const risePer12 = parsePitchToRisePer12(pitchInput ?? "");
-  const pitchValid = risePer12 !== null && isFinite(risePer12) && risePer12 >= 0;
-  const perimeter = 2 * (L + W);
-  const wallRectArea = perimeter * H;
-
-  let gableAdd = 0;
-  if (pitchValid && includeGableTriangles) {
-    const riseCenter = (W / 2) * risePer12!;
-    gableAdd = W * riseCenter;
-  }
   
+  // Base variables
+  let wallTotal = 0;
+  let roofArea = 0;
+  let pitchValid = true;
+  let risePer12 = 0;
+  let slopeFactor = 1;
+  let perimeter = 0;
+  let wallRectArea = 0;
+  let gableAdd = 0;
+
   const additionalWallArea = (additionalSections || [])
     .filter(s => s.type === 'walls')
     .reduce((sum, s) => sum + (Number(s.length) * Number(s.width)), 0);
-
-  const wallTotal = wallRectArea + gableAdd + additionalWallArea;
-
-  const slopeFactor = pitchValid ? Math.sqrt(1 + risePer12! * risePer12!) : NaN;
-  const mainBuildingRoofArea = pitchValid ? L * W * slopeFactor : 0;
-  
+    
   const additionalRoofArea = (additionalSections || [])
     .filter(s => s.type === 'roof')
     .reduce((sum, s) => sum + (Number(s.length) * Number(s.width)), 0);
+
+  if (calculatorType === 'building') {
+    const L = Math.max(0, Number(length));
+    const W = Math.max(0, Number(width));
+    const H = Math.max(0, Number(wallHeight));
+    const parsedRise = parsePitchToRisePer12(pitchInput ?? "");
     
-  const roofArea = mainBuildingRoofArea + additionalRoofArea;
+    pitchValid = parsedRise !== null && isFinite(parsedRise) && parsedRise >= 0;
+    risePer12 = parsedRise ?? NaN;
+    slopeFactor = pitchValid ? Math.sqrt(1 + risePer12 * risePer12) : NaN;
+    perimeter = 2 * (L + W);
+    wallRectArea = perimeter * H;
+
+    if (pitchValid && includeGableTriangles) {
+        const riseCenter = (W / 2) * risePer12;
+        gableAdd = W * riseCenter;
+    }
+    wallTotal = wallRectArea + gableAdd + additionalWallArea;
+    roofArea = (pitchValid ? L * W * slopeFactor : 0) + additionalRoofArea;
+  
+  } else if (calculatorType === 'walls') {
+    wallTotal = (Number(totalWallLength) * Number(wallHeight)) + additionalWallArea;
+    roofArea = additionalRoofArea; // Roof area can still be added via custom sections
+  
+  } else if (calculatorType === 'flat-area') {
+    wallTotal = additionalWallArea;
+    roofArea = (Number(length) * Number(width)) + additionalRoofArea;
+  
+  } else if (calculatorType === 'custom') {
+    wallTotal = additionalWallArea;
+    roofArea = additionalRoofArea;
+  }
+
+
   const totalSprayArea = wallTotal + roofArea;
 
   const wThick = clamp(Number(wallThicknessIn), 0, 1000);
@@ -114,7 +138,7 @@ export function calculateResults(inputs: CalculatorInputs): Omit<CalculationResu
   const ccSets = isFinite(totalClosedCellBoardFeet) ? totalClosedCellBoardFeet / ccYield : NaN;
 
   return {
-    pitchValid, risePer12: risePer12 ?? NaN, slopeFactor: slopeFactor, perimeter,
+    pitchValid, risePer12, slopeFactor, perimeter,
     wallRectArea, gableAdd, wallTotal, roofArea, totalSprayArea, totalBoardFeetBase,
     wallBoardFeetWithWaste, roofBoardFeetWithWaste, totalBoardFeetWithWaste, wallFoamType,
     roofFoamType, wallThicknessIn: wThick, roofThicknessIn: rThick, ocSets, ccSets,

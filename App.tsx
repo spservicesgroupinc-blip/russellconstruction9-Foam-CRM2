@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import SprayFoamCalculator, { CalculationResults, CalculatorInputs, InventoryLineItem } from './components/SprayFoamCalculator.tsx';
 import JobCosting from './components/JobCosting.tsx';
@@ -43,7 +42,9 @@ export interface AppSettings {
 }
 
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
+  calculatorType: 'building',
   length: 100, width: 50, wallHeight: 16, pitchInput: "6/12", includeGableTriangles: true,
+  totalWallLength: 0,
   wallFoamType: 'open-cell', wallThicknessIn: 5.5, wallWastePct: 10,
   roofFoamType: 'open-cell', roofThicknessIn: 7.5, roofWastePct: 15,
   openCellYield: 16000, closedCellYield: 4000,
@@ -432,7 +433,7 @@ const App: React.FC = () => {
     // Admin Pages
     switch (page) {
       case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
-      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} />;
+      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} defaultCalculatorInputs={DEFAULT_CALCULATOR_INPUTS} />;
       case 'costing': 
         if (currentJob) { // Invoice mode from an existing job
             return <JobCosting 
