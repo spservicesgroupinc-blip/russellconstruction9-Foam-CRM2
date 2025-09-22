@@ -482,7 +482,7 @@ const App: React.FC = () => {
   }
   
   if (!currentUser) {
-    return <LoginScreen employees={employees} onLogin={handleLogin} />;
+    return <LoginScreen employees={employees} onLogin={handleLogin} onAddCustomer={handleAddCustomer} />;
   }
 
   return (

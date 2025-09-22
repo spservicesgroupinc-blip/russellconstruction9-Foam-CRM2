@@ -1,18 +1,26 @@
-
 import React, { useState } from 'react';
 import { Employee } from './types.ts';
 import { CurrentUser } from '../App.tsx';
 import Logo from './Logo.tsx';
+import { CustomerInfo } from './EstimatePDF.tsx';
 
 interface LoginScreenProps {
     employees: Employee[];
     onLogin: (user: CurrentUser) => void;
+    onAddCustomer: (customer: Omit<CustomerInfo, 'id'>) => Promise<CustomerInfo>;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ employees, onLogin }) => {
+const EMPTY_INQUIRY = { name: '', email: '', phone: '', role: '', message: '' };
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ employees, onLogin, onAddCustomer }) => {
     const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
+    
+    // State for the new form
+    const [inquiry, setInquiry] = useState(EMPTY_INQUIRY);
+    const [inquiryStatus, setInquiryStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
 
     const handleEmployeeSelect = (employee: Employee) => {
         setSelectedEmployee(employee);
@@ -33,8 +41,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ employees, onLogin }) => {
         onLogin({ role: 'admin' });
     };
 
+    const handleInquiryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setInquiry(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleInquirySubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setInquiryStatus('submitting');
+        try {
+            await onAddCustomer({
+                name: inquiry.name,
+                email: inquiry.email,
+                phone: inquiry.phone,
+                address: 'N/A - Lead Capture',
+                notes: `Inquiry Type: ${inquiry.role}\n\nMessage:\n${inquiry.message}`
+            });
+            setInquiryStatus('success');
+            setInquiry(EMPTY_INQUIRY);
+            setTimeout(() => setInquiryStatus('idle'), 4000);
+        } catch (err) {
+            console.error(err);
+            setInquiryStatus('error');
+        }
+    };
+
     const card = "rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm p-6";
     const input = "mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white";
+    const label = "text-sm font-medium text-slate-600 dark:text-slate-300";
 
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-slate-800 flex flex-col items-center justify-center p-4">
@@ -71,6 +105,61 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ employees, onLogin }) => {
                 </div>
 
             </div>
+
+             {/* NEW SECTION for Customer Inquiry */}
+            <div className="w-full max-w-4xl mx-auto mt-6">
+                <div className={card}>
+                    <div className="text-center">
+                        <h2 className="text-xl font-bold dark:text-white">New Customer Inquiry</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Interested in our services? Fill out the form below.</p>
+                    </div>
+                    {inquiryStatus === 'success' ? (
+                        <div className="mt-4 p-4 text-center rounded-lg bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">
+                            <h3 className="font-semibold">Thank you!</h3>
+                            <p className="text-sm">Your inquiry has been submitted. We will be in touch shortly.</p>
+                        </div>
+                    ) : (
+                        <form name="contact" onSubmit={handleInquirySubmit} className="mt-4 space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className={label}>Your Name</span>
+                                    <input type="text" name="name" value={inquiry.name} onChange={handleInquiryChange} className={input} required />
+                                </label>
+                                <label className="block">
+                                    <span className={label}>Your Email</span>
+                                    <input type="email" name="email" value={inquiry.email} onChange={handleInquiryChange} className={input} required />
+                                </label>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label className="block">
+                                    <span className={label}>Phone Number</span>
+                                    <input type="tel" name="phone" value={inquiry.phone} onChange={handleInquiryChange} className={input} />
+                                </label>
+                                <label className="block">
+                                    <span className={label}>Inquiry Type</span>
+                                    <select name="role" value={inquiry.role} onChange={handleInquiryChange} className={`${input} appearance-none`}>
+                                        <option value="">-- Please choose an option --</option>
+                                        <option value="Residential Quote">Residential Quote</option>
+                                        <option value="Commercial Quote">Commercial Quote</option>
+                                        <option value="General Question">General Question</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <label className="block">
+                                <span className={label}>Message</span>
+                                <textarea name="message" value={inquiry.message} onChange={handleInquiryChange} rows={4} className={input}></textarea>
+                            </label>
+                            <div>
+                                <button type="submit" disabled={inquiryStatus === 'submitting'} className="w-full rounded-lg bg-green-600 px-4 py-3 text-white font-semibold shadow hover:bg-green-700 transition-colors disabled:bg-slate-400">
+                                    {inquiryStatus === 'submitting' ? 'Submitting...' : 'Send Inquiry'}
+                                </button>
+                                {inquiryStatus === 'error' && <p className="mt-2 text-center text-sm text-red-500">Failed to submit inquiry. Please try again later.</p>}
+                            </div>
+                        </form>
+                    )}
+                </div>
+            </div>
+
 
             {selectedEmployee && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setSelectedEmployee(null)}>
