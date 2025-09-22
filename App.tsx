@@ -518,6 +518,8 @@ const App: React.FC = () => {
                 onUpdateCalendarJob={updateCalendarJob}
                 onDeleteCalendarJob={deleteCalendarJob}
                 appSettings={appSettings}
+                jobs={jobs}
+                handleUpdateJob={handleUpdateJob}
             />
         </>
       )}

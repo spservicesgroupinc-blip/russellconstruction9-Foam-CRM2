@@ -1,12 +1,13 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import { CompanyInfo, CustomerInfo } from './EstimatePDF.tsx';
-import { CalculatorInputs, CalculationResults } from './SprayFoamCalculator.tsx';
+import { CalculatorInputs } from './SprayFoamCalculator.tsx';
 import { OnHandInventory } from './MaterialOrder.tsx';
-import { calculateResults } from '../lib/processing.ts';
 import { Job } from './types.ts';
 import { fmtInput, addDays } from './utils.ts';
 import { AppSettings, Page } from '../App.tsx';
+import { EstimateRecord, JobStatus } from '../lib/db.ts';
 
 
 // Add declarations for jspdf and html2canvas
@@ -25,12 +26,13 @@ interface GeminiAgentProps {
   setOnHandInventory: React.Dispatch<React.SetStateAction<OnHandInventory>>;
   handleJobSold: (estimate: any) => void;
   companyInfo: CompanyInfo;
-  // New props for full calendar control
   calendarJobs: Job[];
   onAddCalendarJob: (job: Omit<Job, 'id'>) => Job;
   onUpdateCalendarJob: (job: Job) => void;
   onDeleteCalendarJob: (jobId: string) => void;
   appSettings: AppSettings;
+  jobs: EstimateRecord[];
+  handleUpdateJob: (jobId: number, updates: Partial<EstimateRecord>) => void;
 }
 
 interface Message {
@@ -77,8 +79,8 @@ const GeminiAgent: React.FC<GeminiAgentProps> = (props) => {
 
   const { 
     customers, handleAddCustomer, setMainPage, setSelectedCustomerId, 
-    setCalculatorInputs, setOnHandInventory, companyInfo, calendarJobs,
-    onAddCalendarJob, onUpdateCalendarJob, onDeleteCalendarJob,
+    setCalculatorInputs, setOnHandInventory, calendarJobs,
+    onAddCalendarJob,
   } = props;
 
   const scrollToBottom = () => {
@@ -241,9 +243,34 @@ const GeminiAgent: React.FC<GeminiAgentProps> = (props) => {
                         length: { type: Type.NUMBER },
                         width: { type: Type.NUMBER },
                         wallHeight: { type: Type.NUMBER },
+                        pitchInput: { type: Type.STRING, description: 'e.g., "6/12" or "26deg"' },
+                        wallFoamType: { type: Type.STRING, enum: ['open-cell', 'closed-cell'] },
                         wallThicknessIn: { type: Type.NUMBER },
+                        wallWastePct: { type: Type.NUMBER },
+                        roofFoamType: { type: Type.STRING, enum: ['open-cell', 'closed-cell'] },
                         roofThicknessIn: { type: Type.NUMBER },
+                        roofWastePct: { type: Type.NUMBER },
                     }
+                }
+            },
+            {
+                name: 'updateJobStatus',
+                description: 'Update the status of an existing job.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {
+                        estimateNumber: { type: Type.STRING, description: 'The unique estimate number of the job to update (e.g., "EST-123456").' },
+                        newStatus: { type: Type.STRING, enum: ['estimate', 'sold', 'invoiced', 'paid'], description: 'The new status for the job.'}
+                    },
+                    required: ['estimateNumber', 'newStatus']
+                }
+            },
+            {
+                name: 'getFinancialSummary',
+                description: 'Retrieves a summary of key financial metrics like revenue, accounts receivable, and pipeline value.',
+                parameters: {
+                    type: Type.OBJECT,
+                    properties: {}
                 }
             },
             {
@@ -292,17 +319,26 @@ const GeminiAgent: React.FC<GeminiAgentProps> = (props) => {
         ];
 
         const systemInstruction = `You are a helpful AI assistant integrated into a CRM for a spray foam insulation company called "FOAM CRMAI".
-Your primary role is to assist the user by executing functions to manage the application's state and navigate its pages.
-If an image of handwritten notes is provided, analyze it to extract customer information (name, address, phone, email) and job specifications (like building dimensions and foam thickness). First, call the 'addCustomer' function with the extracted customer details. Then, call the 'updateCalculator' function with the job specifications. Finally, navigate to the 'calculator' page to show the results and inform the user you have done so.
+Your primary role is to assist the user by executing functions to manage the application's state and answer questions about its data.
 The current date is ${new Date().toLocaleDateString()}.
 Do not ask for confirmation before calling a function. Call it directly with the information you have.
-If a customer name is mentioned, check if they exist in the provided customer list before deciding to add a new one.
-When asked to start an estimate for a customer, use the 'startEstimate' function with their customer ID.
-When asked to perform a calculation, first navigate to the 'calculator' page if not already there, then use the 'updateCalculator' function.
 Be concise in your text responses. The user wants quick actions, not long conversations.
 
-Available customers:
+FUNCTION CALLING CAPABILITIES:
+- **Image Analysis**: If an image of handwritten notes is provided, analyze it to extract customer information and job specifications. First, call 'addCustomer'. Then, call 'updateCalculator'. Finally, navigate to the 'calculator' page and inform the user.
+- **Navigation**: Use the 'navigate' function to move between pages like 'dashboard', 'calculator', 'customers', etc.
+- **Customer Management**: Use 'addCustomer' to create new clients.
+- **Estimates**: Use 'startEstimate' to begin a new quote for a customer. Use 'updateCalculator' to fill in job specifications.
+- **Job Management**: Use 'updateJobStatus' to change a job's state (e.g., from 'estimate' to 'sold'). Find job numbers from the 'Current Jobs' list below.
+- **Scheduling**: Use 'scheduleJob' and 'findJob' to manage the calendar.
+- **Inventory**: Use 'getOnHandInventory' and 'updateOnHandInventory' to manage material stock.
+- **Reporting**: Use 'getFinancialSummary' to get an overview of company finances.
+
+AVAILABLE DATA CONTEXT:
+1.  **Available Customers**:
 ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No customers in the system yet.'}
+2.  **Current Jobs**:
+${props.jobs.map(j => `- Est #: ${j.estimateNumber}, Cust: ${customers.find(c => c.id === j.customerId)?.name || 'N/A'}, Status: ${j.status}, Value: $${j.costsData.finalQuote.toFixed(2)}`).join('\n') || 'No jobs in the system yet.'}
 `;
 
         const chatHistory = messages.map(msg => {
@@ -335,6 +371,14 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
                 tools: [{ functionDeclarations }]
             }
         });
+        
+        const groundingMetadata = initialResponse.candidates?.[0]?.groundingMetadata;
+        const sources = groundingMetadata?.groundingChunks
+            ?.filter((chunk: any) => chunk.web)
+            .map((chunk: any) => ({
+                title: chunk.web.title,
+                uri: chunk.web.uri,
+            }));
 
         const functionCalls = initialResponse.candidates?.[0]?.content?.parts
             .filter(part => part.functionCall)
@@ -371,6 +415,29 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
                         setCalculatorInputs(prev => ({ ...prev, ...(call.args as Partial<CalculatorInputs>) }));
                         setMainPage('calculator');
                         responseData = { success: true, message: 'Calculator updated.' };
+                        break;
+                    case 'updateJobStatus':
+                        const { estimateNumber, newStatus } = call.args as { estimateNumber: string, newStatus: JobStatus };
+                        const jobToUpdate = props.jobs.find(j => j.estimateNumber === estimateNumber);
+                        if (jobToUpdate && jobToUpdate.id) {
+                            await props.handleUpdateJob(jobToUpdate.id, { status: newStatus });
+                            responseData = { success: true, message: `Job ${estimateNumber} status updated to ${newStatus}.` };
+                            props.setMainPage('jobsList');
+                        } else {
+                            responseData = { success: false, message: `Job with number ${estimateNumber} not found.` };
+                        }
+                        break;
+                     case 'getFinancialSummary':
+                        const accountsReceivable = props.jobs
+                            .filter(j => j.status === 'invoiced')
+                            .reduce((sum, j) => sum + (j.costsData?.finalQuote || 0), 0);
+                        const pipelineValueSold = props.jobs
+                            .filter(j => j.status === 'sold')
+                            .reduce((sum, j) => sum + (j.costsData?.finalQuote || 0), 0);
+                        responseData = {
+                            accountsReceivable: `$${accountsReceivable.toFixed(2)}`,
+                            pipelineValue: `$${pipelineValueSold.toFixed(2)}`,
+                        };
                         break;
                     case 'getOnHandInventory':
                         responseData = props.onHandInventory;
@@ -425,7 +492,7 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
 
             setMessages(prev => [...prev, { role: 'assistant', text: finalResponse.text }]);
         } else {
-            setMessages(prev => [...prev, { role: 'assistant', text: initialResponse.text }]);
+            setMessages(prev => [...prev, { role: 'assistant', text: initialResponse.text, sources }]);
         }
 
     } catch (err) {
@@ -472,7 +539,21 @@ ${customers.map(c => `- ID: ${c.id}, Name: ${c.name}`).join('\n') || 'No custome
               <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-xs md:max-w-sm rounded-2xl px-4 py-2 ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-50 rounded-bl-none'}`}>
                   {msg.imageUrl && <img src={msg.imageUrl} alt="Uploaded content" className="max-w-full h-auto rounded-lg mb-2" />}
-                  {msg.text && <div>{msg.text}</div>}
+                  {msg.text && <div className="whitespace-pre-wrap">{msg.text}</div>}
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-300 dark:border-slate-600">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Sources</h4>
+                        <ul className="space-y-1">
+                            {msg.sources.map((source, i) => (
+                                <li key={i}>
+                                    <a href={source.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline truncate block">
+                                        {i+1}. {source.title || source.uri}
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
