@@ -46,7 +46,7 @@ interface LineItem {
 }
 
 const EMPTY_CUSTOMER: Omit<CustomerInfo, 'id'> = {
-  name: "", address: "", email: "", phone: "",
+  name: "", address: "", email: "", phone: "", notes: ""
 };
 
 // Simple markdown renderer for displaying the scope in the editor

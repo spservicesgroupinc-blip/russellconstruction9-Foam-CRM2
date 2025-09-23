@@ -11,7 +11,6 @@ import JobDetail from './components/JobDetail.tsx';
 import MaterialOrder, { OnHandInventory } from './components/MaterialOrder.tsx';
 import Invoicing from './components/Invoicing.tsx';
 import JobCalendar from './components/JobCalendar.tsx';
-import MapView from './components/MapView.tsx';
 import GeminiAgent from './components/GeminiAgent.tsx';
 import GanttPage from './components/GanttPage.tsx';
 import TeamPage from './components/TeamPage.tsx';
@@ -27,7 +26,7 @@ import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
 import { Job, Employee, Task } from './components/types.ts';
 
-export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
+export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -404,7 +403,6 @@ const App: React.FC = () => {
   const NavButton: React.FC<{
     target: Page;
     label: string;
-// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
     icon: React.ReactElement;
   }> = ({ target, label, icon }) => (
     <button
@@ -426,165 +424,117 @@ const App: React.FC = () => {
         case 'employeeDashboard': return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} tasks={tasks} onToggleTaskCompletion={handleToggleTaskCompletion} />;
         case 'schedule': return <JobCalendar jobToSchedule={null} onJobScheduled={() => {}} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
         case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} currentUser={currentUser.data} />;
-        default:
-          setPage('employeeDashboard'); // Redirect to a valid employee page
-          return null;
+        default: return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} tasks={tasks} onToggleTaskCompletion={handleToggleTaskCompletion} />;
       }
     }
 
-    // Admin Pages
-    switch (page) {
-      case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(s) => { setFilter(s); setPage('jobsList'); }} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
-      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} defaultCalculatorInputs={DEFAULT_CALCULATOR_INPUTS} />;
-      case 'costing': 
-        if (currentJob) { // Invoice mode from an existing job
-            return <JobCosting 
-                        calculationResults={currentJob.calcData} 
-                        onBack={() => setPage('jobDetail')}
-                        companyInfo={companyInfo!}
-                        isInvoiceMode={true}
-                        initialJobData={currentJob}
-                        onFinalizeInvoice={handleFinalizeInvoice}
-                        defaultCosts={appSettings.defaultCosts} 
-                        inventoryItems={inventoryItems}
-                    />;
-        } else if (calculationResults) { // Estimate mode from the calculator
-            return <JobCosting 
-                        calculationResults={calculationResults} 
-                        onBack={() => { setCalculationResults(null); setPage('calculator'); }} 
-                        companyInfo={companyInfo!} 
-                        onEstimateCreated={handleEstimateCreated} 
-                        defaultCosts={appSettings.defaultCosts}
-                        inventoryItems={inventoryItems}
-                    />;
-        }
-        setPage('dashboard'); // Fallback if state is inconsistent
-        return null;
+    // Admin pages
+    switch(page) {
+      case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(status) => {setFilter(status); setPage('jobsList');}} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
+      case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} defaultCalculatorInputs={DEFAULT_CALCULATOR_INPUTS} />;
+      case 'costing': return calculationResults ? <JobCosting calculationResults={calculationResults} onBack={() => {setPage('calculator'); setCalculationResults(null);}} companyInfo={companyInfo!} onEstimateCreated={handleEstimateCreated} defaultCosts={appSettings.defaultCosts} inventoryItems={inventoryItems} /> : <p>Missing calculation results. Please go back to the calculator.</p>;
       case 'customers': return <Customers customers={customers} onAddCustomer={handleAddCustomer} onViewCustomer={handleViewCustomer} onUpdateCustomer={handleUpdateCustomer} />;
-      case 'customerDetail': return <CustomerDetail customerId={selectedCustomerId as number} onBack={() => setPage('customers')} onViewJob={handleViewJob} onUpdateCustomer={handleUpdateCustomer}/>;
+      case 'customerDetail': return <CustomerDetail customerId={selectedCustomerId as number} onBack={() => setPage('customers')} onViewJob={handleViewJob} onUpdateCustomer={handleUpdateCustomer} />;
       case 'jobsList': return <JobsList jobs={jobs} customers={customers} onViewJob={handleViewJob} onDeleteJob={handleDeleteJob} filter={filter} setFilter={setFilter} />;
-      case 'jobDetail': return currentJob && <JobDetail job={currentJob} customers={customers} employees={employees} onBack={() => { resetCurrentJob(); setPage('jobsList'); }} onUpdateJob={handleUpdateJob} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); }} onScheduleJob={handleScheduleJob} onViewCustomer={handleViewCustomer} />;
+      case 'jobDetail': return currentJob ? <JobDetail job={currentJob} customers={customers} employees={employees} onBack={() => {setCurrentJob(null); setPage('jobsList');}} onUpdateJob={handleUpdateJob} onPrepareInvoice={(job) => {setCurrentJob(job); setPage('invoicing');}} onScheduleJob={handleScheduleJob} onViewCustomer={handleViewCustomer} /> : <p>No job selected. Please go back to the jobs list.</p>;
+      case 'invoicing': return currentJob ? <JobCosting calculationResults={currentJob.calcData!} onBack={() => {setCurrentJob(currentJob); setPage('jobDetail');}} companyInfo={companyInfo!} isInvoiceMode={true} initialJobData={currentJob} onFinalizeInvoice={handleFinalizeInvoice} defaultCosts={appSettings.defaultCosts} inventoryItems={inventoryItems} /> : <Invoicing soldJobs={jobs.filter(j => j.status === 'sold' || j.status === 'invoiced')} customers={customers} companyInfo={companyInfo!} onPrepareInvoice={(job) => {setCurrentJob(job); setPage('invoicing');}} />;
       case 'materialOrder': return <MaterialOrder soldJobData={soldJobData} onHandInventory={onHandInventory} setOnHandInventory={setOnHandInventory} />;
-      case 'invoicing': return <Invoicing soldJobs={jobs.filter(j => j.status === 'sold' || j.status === 'invoiced')} customers={customers} companyInfo={companyInfo!} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); /* re-use for invoice editing */ }} />;
       case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
       case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} />;
-      case 'team': return <TeamPage employees={employees} onAddEmployee={handleAddEmployee} jobs={jobs.filter(j => j.status === 'sold')} />;
+      case 'team': return <TeamPage employees={employees} onAddEmployee={handleAddEmployee} jobs={jobs} />;
       case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} />;
       case 'inventory': return <InventoryPage items={inventoryItems} onAddItem={handleAddInventoryItem} onUpdateItem={handleUpdateInventoryItem} onDeleteItem={handleDeleteInventoryItem} />;
       case 'settings': return <Settings onSave={handleSaveSettings} currentInfo={companyInfo} appSettings={appSettings} />;
       case 'more': return <MorePage onNavigate={setPage} onLogout={handleLogout} />;
-      default: return <div>Page not found</div>;
+      default: return <h1>Page not found</h1>;
     }
-  };
+  }
 
   if (isInitialSetup) {
-    return <Settings onSave={handleSaveSettings} currentInfo={companyInfo} appSettings={appSettings} isInitialSetup />;
+    return <Settings onSave={handleSaveSettings} appSettings={appSettings} isInitialSetup={true} />;
   }
-  
+
   if (!currentUser) {
     return <LoginScreen employees={employees} onLogin={handleLogin} onAddCustomer={handleAddCustomer} />;
   }
 
   return (
-    <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 min-h-screen font-sans">
-      <Header 
-        user={{ name: currentUser.role === 'admin' ? 'Admin' : currentUser.data.name }}
-        onLogout={handleLogout}
-      />
-      <div className="pb-24 pt-16">
-        {renderPage()}
-      </div>
-      
+    <div className="flex flex-col h-screen font-sans">
       {currentUser.role === 'admin' && (
-        <>
-            <QuickAddFAB 
-                onNewEstimate={handleFabNewEstimate}
-                onNewCustomer={handleFabNewCustomer}
-            />
-
-            <GeminiAgent 
-                setMainPage={setPage}
-                customers={customers}
-                handleAddCustomer={handleAddCustomer}
-                handleUpdateCustomer={handleUpdateCustomer}
-                setSelectedCustomerId={setSelectedCustomerId}
-                calculatorInputs={calculatorInputs}
-                setCalculatorInputs={setCalculatorInputs}
-                onHandInventory={onHandInventory}
-                setOnHandInventory={setOnHandInventory}
-                handleJobSold={handleJobSold}
-                companyInfo={companyInfo!}
-                calendarJobs={calendarJobs}
-                onAddCalendarJob={addCalendarJob}
-                onUpdateCalendarJob={updateCalendarJob}
-                onDeleteCalendarJob={deleteCalendarJob}
-                appSettings={appSettings}
-                jobs={jobs}
-                handleUpdateJob={handleUpdateJob}
-            />
-        </>
+        <GeminiAgent 
+          setMainPage={setPage}
+          customers={customers}
+          handleAddCustomer={handleAddCustomer}
+          handleUpdateCustomer={handleUpdateCustomer}
+          setSelectedCustomerId={setSelectedCustomerId}
+          calculatorInputs={calculatorInputs}
+          setCalculatorInputs={setCalculatorInputs}
+          onHandInventory={onHandInventory}
+          setOnHandInventory={setOnHandInventory}
+          handleJobSold={handleJobSold}
+          companyInfo={companyInfo!}
+          calendarJobs={calendarJobs}
+          onAddCalendarJob={addCalendarJob}
+          onUpdateCalendarJob={updateCalendarJob}
+          onDeleteCalendarJob={deleteCalendarJob}
+          appSettings={appSettings}
+          jobs={jobs}
+          handleUpdateJob={handleUpdateJob}
+        />
       )}
+      {currentUser.role === 'admin' && <QuickAddFAB onNewEstimate={handleFabNewEstimate} onNewCustomer={handleFabNewCustomer} />}
+      {currentUser.role === 'employee' && <Header user={{ name: currentUser.data.name }} onLogout={handleLogout} />}
       
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-2 z-[9998]">
-        {currentUser.role === 'admin' ? (
-            <div className="grid grid-cols-5 max-w-2xl mx-auto gap-1">
-                <NavButton target="dashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
-                <NavButton target="customers" label="Clients" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.653-.124-1.282-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.653.124-1.282.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
-                <NavButton target="calculator" label="Estimate" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} />
-                <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
-                <NavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
-            </div>
-        ) : (
-            <div className="grid grid-cols-3 max-w-sm mx-auto gap-1">
-                 <NavButton target="employeeDashboard" label="Dashboard" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
-                 <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
-                 <NavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
-            </div>
-        )}
-      </div>
+      <main className={`flex-grow overflow-y-auto ${currentUser.role === 'employee' ? 'pt-16' : ''} pb-24`}>
+          {renderPage()}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-[999] bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700">
+        <div className="mx-auto max-w-md grid grid-cols-5 gap-1 p-2">
+           {currentUser.role === 'admin' ? (
+              <>
+                  <NavButton target="dashboard" label="Dashboard" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} />
+                  <NavButton target="customers" label="Customers" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-3-5.197m0 0A4 4 0 0012 4.354m0 5.292a4 4 0 00-3 5.197" /></svg>} />
+                  <NavButton target="calculator" label="Calculator" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} />
+                  <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+                  <NavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
+              </>
+            ) : (
+                <>
+                  <NavButton target="employeeDashboard" label="Dashboard" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>} />
+                  <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+                  <NavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+                   <div className="w-full"></div>
+                   <div className="w-full"></div>
+                </>
+            )}
+        </div>
+      </nav>
 
       {isAddCustomerModalOpen && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4" aria-modal="true" role="dialog">
-              <div className="relative w-full max-w-md rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl">
-                  <button onClick={() => setIsAddCustomerModalOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close modal">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                  </button>
-                  <form onSubmit={handleSaveNewCustomer}>
-                      <h2 className="text-xl font-bold dark:text-white">Add New Customer</h2>
-                      <div className="mt-4 space-y-3">
-                          <label className="block">
-                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Full Name</span>
-                              <input type="text" name="name" value={newCustomer.name} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" required />
-                          </label>
-                          <label className="block">
-                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Address</span>
-                              <input type="text" name="address" value={newCustomer.address} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" required />
-                          </label>
-                          <label className="block">
-                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Phone</span>
-                              <input type="tel" name="phone" value={newCustomer.phone} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" />
-                          </label>
-                          <label className="block">
-                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Email</span>
-                              <input type="email" name="email" value={newCustomer.email} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white" />
-                          </label>
-                          <label className="block">
-                              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Notes</span>
-                              <textarea name="notes" rows={3} value={newCustomer.notes || ''} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"></textarea>
-                          </label>
-                      </div>
-                      <div className="mt-6 flex justify-end gap-3">
-                          <button type="button" onClick={() => setIsAddCustomerModalOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700">Cancel</button>
-                          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Save Customer</button>
-                      </div>
-                  </form>
-              </div>
-          </div>
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsAddCustomerModalOpen(false)}>
+            <div className="relative w-full max-w-lg rounded-xl bg-white dark:bg-slate-800 p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setIsAddCustomerModalOpen(false)} className="absolute top-4 right-4 text-slate-400">&times;</button>
+                <form onSubmit={handleSaveNewCustomer}>
+                    <h2 className="text-xl font-bold dark:text-white">Add New Customer</h2>
+                    <div className="mt-4 space-y-3">
+                        <label className="block"><span className="text-sm font-medium">Name</span><input type="text" name="name" value={newCustomer.name} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-3 py-2" required /></label>
+                        <label className="block"><span className="text-sm font-medium">Address</span><input type="text" name="address" value={newCustomer.address} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-3 py-2" required /></label>
+                        <div className="grid grid-cols-2 gap-4">
+                           <label className="block"><span className="text-sm font-medium">Phone</span><input type="tel" name="phone" value={newCustomer.phone} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-3 py-2" /></label>
+                           <label className="block"><span className="text-sm font-medium">Email</span><input type="email" name="email" value={newCustomer.email} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-3 py-2" /></label>
+                        </div>
+                        <label className="block"><span className="text-sm font-medium">Notes</span><textarea name="notes" rows={3} value={newCustomer.notes} onChange={handleNewCustomerChange} className="mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-3 py-2"></textarea></label>
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                        <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Save Customer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
       )}
     </div>
   );
-};
+}
 
 export default App;

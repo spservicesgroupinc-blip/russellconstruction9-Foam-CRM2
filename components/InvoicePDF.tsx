@@ -41,9 +41,11 @@ const renderScope = (text: string) => {
         // If the last element is already a <ul>, we append the new <li> to its children
         if (lastElement && lastElement.type === 'ul') {
           // Since props are immutable, we create a new element by cloning
-          const newChildren = Array.isArray(lastElement.props.children)
-            ? [...lastElement.props.children, el]
-            : [lastElement.props.children, el];
+          // FIX: Cast `lastElement.props` to include children to fix type error.
+          const { children } = lastElement.props as { children?: React.ReactNode };
+          const newChildren = Array.isArray(children)
+            ? [...children, el]
+            : [children, el];
 
           // Replace the last element with the new one
           acc[acc.length - 1] = React.cloneElement(lastElement, lastElement.props, newChildren);

@@ -105,9 +105,11 @@ const EstimatePDF: React.FC<EstimatePDFProps> = ({ calc, costs, companyInfo, cus
         // If the last element is already a <ul>, we append the new <li> to its children
         if (lastElement && lastElement.type === 'ul') {
           // Since props are immutable, we create a new element by cloning
-          const newChildren = Array.isArray(lastElement.props.children)
-            ? [...lastElement.props.children, el]
-            : [lastElement.props.children, el];
+          // FIX: Cast `lastElement.props` to a type that includes `children` to resolve TypeScript error.
+          const { children } = lastElement.props as { children?: React.ReactNode };
+          const newChildren = Array.isArray(children)
+            ? [...children, el]
+            : [children, el];
 
           // Replace the last element with the new one
           acc[acc.length - 1] = React.cloneElement(lastElement, lastElement.props, newChildren);
