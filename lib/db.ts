@@ -1,7 +1,18 @@
 import Dexie, { Table } from 'dexie';
+import { createClient } from '@supabase/supabase-js';
 import { CustomerInfo, Costs } from '../components/EstimatePDF.tsx';
 import { CalculationResults } from '../components/SprayFoamCalculator.tsx';
 import { TimeEntry, Employee, Task } from '../components/types.ts';
+
+// Supabase Client Initialization
+// The user provided this URL.
+const supabaseUrl = 'https://aewmakdhqxccuiggrfas.supabase.co';
+// The user's own code snippet and the app's conventions point to using an environment variable.
+const supabaseAnonKey = process.env.SUPABASE_KEY;
+
+// Initialize the client but make it nullable if env vars are missing.
+// This prevents the app from crashing and allows it to function offline with Dexie.
+export const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 export type JobStatus = 'estimate' | 'sold' | 'invoiced' | 'paid';
 
