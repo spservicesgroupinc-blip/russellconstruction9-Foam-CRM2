@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { CustomerInfo } from './EstimatePDF.tsx';
 import { getEstimatesForCustomer, EstimateRecord, db, JobStatus } from '../lib/db.ts';
@@ -104,7 +105,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack, onV
                     jobId: job.id!,
                     jobEstimateNumber: job.estimateNumber.replace('EST-', 'INV-'),
                     date: job.createdAt,
-                    blob: job.estimatePdf,
+                    blob: job.invoicePdf || job.estimatePdf,
                 });
             } else { // It's a standard estimate or sold job
                  jobDocs.push({

@@ -62,7 +62,8 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
     const input = "mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white";
     const small = "text-xs text-slate-500 dark:text-slate-400";
     
-    const ThemeButton: React.FC<{ value: Theme, label: string, icon: JSX.Element }> = ({ value, label, icon }) => (
+// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
+    const ThemeButton: React.FC<{ value: Theme, label: string, icon: React.ReactElement }> = ({ value, label, icon }) => (
         <button
             type="button"
             onClick={() => handleSettingsChange('theme', value)}
@@ -146,7 +147,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                                         <label className="block"><span className={label}>Labor Rate ($/hr)</span><input type="number" min={0} className={input} name="laborRate" value={appSettings.defaultCosts.laborRate} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>Equipment Fee ($)</span><input type="number" min={0} className={input} name="equipmentFee" value={appSettings.defaultCosts.equipmentFee} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>Overhead (%)</span><input type="number" min={0} className={input} name="overheadPercentage" value={appSettings.defaultCosts.overheadPercentage} onChange={handleCostsChange} /></label>
-                                        <label className="block"><span className={label}>Sales Tax (%)</span><input type="number" min={0} className={input} name="salesTax" value={appSettings.defaultCosts.salesTax} onChange={handleCostsChange} /></label>
+                                        <label className="block"><span className="label}>Sales Tax (%)</span><input type="number" min={0} className={input} name="salesTax" value={appSettings.defaultCosts.salesTax} onChange={handleCostsChange} /></label>
                                     </div>
                                 </div>
                              </div>

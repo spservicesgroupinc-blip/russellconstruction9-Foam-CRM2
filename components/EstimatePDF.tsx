@@ -120,7 +120,8 @@ const EstimatePDF: React.FC<EstimatePDFProps> = ({ calc, costs, companyInfo, cus
         acc.push(el);
       }
       return acc;
-    }, [] as JSX.Element[]);
+// FIX: Changed JSX.Element[] to React.ReactElement[] to resolve namespace error.
+    }, [] as React.ReactElement[]);
   };
 
   return (

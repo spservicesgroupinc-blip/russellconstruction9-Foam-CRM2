@@ -12,7 +12,8 @@ const MorePage: React.FC<MorePageProps> = ({ onNavigate, onLogout }) => {
 
   interface ListItemProps {
     page: Page;
-    icon: JSX.Element;
+// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
+    icon: React.ReactElement;
     title: string;
     description: string;
   }

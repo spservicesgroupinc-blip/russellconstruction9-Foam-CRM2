@@ -161,7 +161,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     const metricValue = "font-bold tracking-tight";
     const metricLabel = "text-sm font-medium text-slate-600 dark:text-slate-300";
 
-    const MetricCard = ({ label, value, icon, colorClass, onClick }: { label: string, value: string, icon: JSX.Element, colorClass: string, onClick?: () => void }) => (
+// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
+    const MetricCard = ({ label, value, icon, colorClass, onClick }: { label: string, value: string, icon: React.ReactElement, colorClass: string, onClick?: () => void }) => (
         <button onClick={onClick} disabled={!onClick} className={`${card} w-full transition-all duration-200 text-left ${onClick ? 'hover:scale-105 hover:shadow-lg hover:bg-slate-50 dark:hover:bg-slate-600/50' : 'cursor-default'}`}>
             <div className={`p-2 rounded-full inline-block ${colorClass.replace('text-', 'bg-').replace('600', '100')} dark:bg-opacity-20`}>
                 {icon}
@@ -171,7 +172,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         </button>
     );
     
-    const TaskItem = ({ task }: { task: Task }) => (
+// FIX: Changed component definition to React.FC to correctly type props and handle the 'key' prop.
+    const TaskItem: React.FC<{ task: Task }> = ({ task }) => (
         <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-600/50">
             <input 
                 type="checkbox" 

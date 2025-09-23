@@ -36,7 +36,8 @@ const Invoicing: React.FC<InvoicingProps> = ({ soldJobs, customers, onPrepareInv
     const card = "rounded-2xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm p-4";
     const h2 = "text-xl font-semibold tracking-tight dark:text-white";
     
-    const JobCard = ({ job }: { job: EstimateRecord }) => {
+// FIX: Changed component definition to React.FC to correctly type props and handle the 'key' prop.
+    const JobCard: React.FC<{ job: EstimateRecord }> = ({ job }) => {
         const customer = findCustomer(job.customerId);
 
         return (

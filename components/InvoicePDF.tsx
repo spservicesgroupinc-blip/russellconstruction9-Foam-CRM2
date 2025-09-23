@@ -56,7 +56,8 @@ const renderScope = (text: string) => {
         acc.push(el);
       }
       return acc;
-    }, [] as JSX.Element[]);
+// FIX: Changed JSX.Element[] to React.ReactElement[] to resolve namespace error.
+    }, [] as React.ReactElement[]);
 };
 
 

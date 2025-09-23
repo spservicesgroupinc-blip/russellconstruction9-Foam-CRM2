@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import SprayFoamCalculator, { CalculationResults, CalculatorInputs, InventoryLineItem } from './components/SprayFoamCalculator.tsx';
 import JobCosting from './components/JobCosting.tsx';
@@ -403,7 +404,8 @@ const App: React.FC = () => {
   const NavButton: React.FC<{
     target: Page;
     label: string;
-    icon: JSX.Element;
+// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
+    icon: React.ReactElement;
   }> = ({ target, label, icon }) => (
     <button
       onClick={() => setPage(target)}
@@ -465,9 +467,7 @@ const App: React.FC = () => {
       case 'materialOrder': return <MaterialOrder soldJobData={soldJobData} onHandInventory={onHandInventory} setOnHandInventory={setOnHandInventory} />;
       case 'invoicing': return <Invoicing soldJobs={jobs.filter(j => j.status === 'sold' || j.status === 'invoiced')} customers={customers} companyInfo={companyInfo!} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('costing'); /* re-use for invoice editing */ }} />;
       case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
-      // FIX: Pass employees prop to GanttPage
       case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} />;
-      case 'map': return <MapView customers={customers} onUpdateCustomer={handleUpdateCustomer} />;
       case 'team': return <TeamPage employees={employees} onAddEmployee={handleAddEmployee} jobs={jobs.filter(j => j.status === 'sold')} />;
       case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} />;
       case 'inventory': return <InventoryPage items={inventoryItems} onAddItem={handleAddInventoryItem} onUpdateItem={handleUpdateInventoryItem} onDeleteItem={handleDeleteInventoryItem} />;
