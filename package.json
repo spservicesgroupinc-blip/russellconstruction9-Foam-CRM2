@@ -6,17 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "netlify dev:exec drizzle-kit migrate",
+    "db:studio": "netlify dev:exec drizzle-kit studio"
   },
   "dependencies": {
     "@google/genai": "^1.19.0",
     "dexie": "^4.2.0",
+    "drizzle-orm": "^0.44.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "drizzle-kit": "^0.31.4",
     "netlify-cli": "^23.7.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
