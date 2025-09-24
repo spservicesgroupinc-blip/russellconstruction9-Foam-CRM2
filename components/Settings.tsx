@@ -147,7 +147,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                                         <label className="block"><span className={label}>Labor Rate ($/hr)</span><input type="number" min={0} className={input} name="laborRate" value={appSettings.defaultCosts.laborRate} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>Equipment Fee ($)</span><input type="number" min={0} className={input} name="equipmentFee" value={appSettings.defaultCosts.equipmentFee} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>Overhead (%)</span><input type="number" min={0} className={input} name="overheadPercentage" value={appSettings.defaultCosts.overheadPercentage} onChange={handleCostsChange} /></label>
-                                        <label className="block"><span className="label}>Sales Tax (%)</span><input type="number" min={0} className={input} name="salesTax" value={appSettings.defaultCosts.salesTax} onChange={handleCostsChange} /></label>
+                                        <label className="block"><span className={label}>Sales Tax (%)</span><input type="number" min={0} className={input} name="salesTax" value={appSettings.defaultCosts.salesTax} onChange={handleCostsChange} /></label>
                                     </div>
                                 </div>
                              </div>
