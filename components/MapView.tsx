@@ -114,8 +114,8 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
                 markersRef.current.set(customer.id, marker as any);
             }
             
-          } else if (customer.address && customer.address !== 'N/A - Lead Capture') {
-            // Geocode if lat/lng are missing and address is valid
+          } else if (customer.address) {
+            // Geocode if lat/lng are missing
             geocodeAddress(customer);
           }
         }
