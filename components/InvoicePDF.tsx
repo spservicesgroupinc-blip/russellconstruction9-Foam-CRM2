@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import type { CalculationResults } from './SprayFoamCalculator';
 import type { Costs, CompanyInfo, CustomerInfo } from './EstimatePDF';
@@ -41,9 +42,10 @@ const renderScope = (text: string) => {
         // If the last element is already a <ul>, we append the new <li> to its children
         if (lastElement && lastElement.type === 'ul') {
           // Since props are immutable, we create a new element by cloning
-          const newChildren = Array.isArray(lastElement.props.children)
-            ? [...lastElement.props.children, el]
-            : [lastElement.props.children, el];
+          // FIX: Cast lastElement.props to any to access children property and resolve type error.
+          const newChildren = Array.isArray((lastElement.props as any).children)
+            ? [...(lastElement.props as any).children, el]
+            : [(lastElement.props as any).children, el];
 
           // Replace the last element with the new one
           acc[acc.length - 1] = React.cloneElement(lastElement, lastElement.props, newChildren);
@@ -56,7 +58,7 @@ const renderScope = (text: string) => {
         acc.push(el);
       }
       return acc;
-// FIX: Changed JSX.Element[] to React.ReactElement[] to resolve namespace error.
+      // FIX: Changed JSX.Element[] to React.ReactElement[] to resolve a namespace error.
     }, [] as React.ReactElement[]);
 };
 
@@ -123,6 +125,12 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ calc, costs, companyInfo, custo
                     <tr>
                         <td className="py-2">Spray Foam Materials (Open & Closed Cell)</td>
                         <td className="py-2 text-right">{fmtCurrency(costs.totalMaterialCost)}</td>
+                    </tr>
+                )}
+                 {costs.totalInventoryCost > 0 && (
+                    <tr>
+                        <td className="py-2">Additional Materials & Supplies</td>
+                        <td className="py-2 text-right">{fmtCurrency(costs.totalInventoryCost)}</td>
                     </tr>
                 )}
                 {costs.laborAndEquipmentCost > 0 && (

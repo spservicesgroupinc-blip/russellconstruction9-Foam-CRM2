@@ -41,7 +41,7 @@ export class AppDatabase extends Dexie {
     // FIX: Cast `this` to `Dexie` to resolve a TypeScript type error where the `version`
     // method was not found on the subclass. This helps the type checker understand
     // that the `AppDatabase` instance has all methods of a `Dexie` instance.
-    (this as Dexie).version(6).stores({
+    (this as Dexie).version(7).stores({
       customers: '++id, name, address',
       estimates: '++id, customerId, estimateNumber, status, createdAt',
       employees: '++id, name',

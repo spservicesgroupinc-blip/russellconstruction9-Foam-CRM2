@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { CompanyInfo } from './EstimatePDF.tsx';
 import Logo from './Logo.tsx';
@@ -62,7 +63,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
     const input = "mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white";
     const small = "text-xs text-slate-500 dark:text-slate-400";
     
-// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
+    // FIX: Changed JSX.Element to React.ReactElement to resolve a namespace error.
     const ThemeButton: React.FC<{ value: Theme, label: string, icon: React.ReactElement }> = ({ value, label, icon }) => (
         <button
             type="button"
@@ -133,6 +134,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                                 <div>
                                     <h3 className="font-medium text-slate-700 dark:text-slate-200">Material Yields</h3>
                                     <div className="mt-2 grid grid-cols-2 gap-3">
+{/* FIX: Removed invalid 'number' attribute from the span element. */}
                                         <label className="block"><span className={label}>Open-cell yield</span><input type="number" min={1} step={1} className={input} name="openCellYield" value={appSettings.defaultYields.openCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                         <label className="block"><span className={label}>Closed-cell yield</span><input type="number" min={1} step={1} className={input} name="closedCellYield" value={appSettings.defaultYields.closedCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                     </div>

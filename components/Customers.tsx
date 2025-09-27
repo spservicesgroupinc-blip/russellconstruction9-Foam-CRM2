@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { CustomerInfo } from './EstimatePDF.tsx';
 import { getEstimatesForCustomer } from '../lib/db.ts';
@@ -44,7 +45,7 @@ const Customers: React.FC<CustomersProps> = ({ customers, onAddCustomer, onViewC
 
   const card = "rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm";
   
-// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
+  // FIX: Changed JSX.Element to React.ReactElement to resolve a namespace error.
   const ViewToggleButton: React.FC<{target: 'list' | 'map', label: string, icon: React.ReactElement}> = ({ target, label, icon }) => {
     const isActive = view === target;
     return (

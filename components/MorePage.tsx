@@ -1,22 +1,102 @@
 
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Page } from '../App.tsx';
+import { db } from '../lib/db.ts';
 
 interface MorePageProps {
   onNavigate: (page: Page) => void;
   onLogout: () => void;
 }
 
+// Helper function to convert array of objects to CSV string
+const convertToCSV = (data: any[]): string => {
+    if (data.length === 0) return '';
+    // Use a comprehensive set of headers from all objects
+    // FIX: Explicitly type the accumulator for `reduce` to ensure `allKeys` becomes a `Set<string>`,
+    // which prevents `header` from being inferred as `unknown` and causing a type error.
+    const allKeys = data.reduce<Set<string>>((keys, obj) => {
+        if (typeof obj === 'object' && obj !== null) {
+            Object.keys(obj).forEach(key => keys.add(key));
+        }
+        return keys;
+    }, new Set<string>());
+    const headers = Array.from(allKeys);
+
+    const csvRows = [headers.join(',')];
+
+    for (const row of data) {
+        const values = headers.map(header => {
+            let value = row[header];
+            if (value === null || value === undefined) {
+                return '';
+            }
+            if (typeof value === 'object' && value !== null) {
+                value = JSON.stringify(value);
+            }
+            const stringValue = String(value);
+            if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+                return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+            return stringValue;
+        });
+        csvRows.push(values.join(','));
+    }
+
+    return csvRows.join('\n');
+};
+
+// Helper function to trigger CSV download
+const downloadCSV = (csvString: string, filename: string) => {
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+
 const MorePage: React.FC<MorePageProps> = ({ onNavigate, onLogout }) => {
+  const [isExporting, setIsExporting] = useState(false);
   const card = "rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm";
 
   interface ListItemProps {
     page: Page;
-// FIX: Changed JSX.Element to React.ReactElement to resolve namespace error.
     icon: React.ReactElement;
     title: string;
     description: string;
   }
+
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+        const customers = await db.customers.toArray();
+        const jobs = await db.estimates.toArray();
+        const inventory = await db.inventory.toArray();
+        const employees = await db.employees.toArray();
+        const tasks = await db.tasks.toArray();
+
+        if (customers.length > 0) downloadCSV(convertToCSV(customers), 'customers.csv');
+        await new Promise(r => setTimeout(r, 200));
+        if (jobs.length > 0) downloadCSV(convertToCSV(jobs), 'jobs.csv');
+        await new Promise(r => setTimeout(r, 200));
+        if (inventory.length > 0) downloadCSV(convertToCSV(inventory), 'inventory.csv');
+        await new Promise(r => setTimeout(r, 200));
+        if (employees.length > 0) downloadCSV(convertToCSV(employees), 'employees.csv');
+        await new Promise(r => setTimeout(r, 200));
+        if (tasks.length > 0) downloadCSV(convertToCSV(tasks), 'tasks.csv');
+
+    } catch (error) {
+        console.error("Failed to export data", error);
+        alert("An error occurred while exporting data.");
+    } finally {
+        setIsExporting(false);
+    }
+  };
 
   const ListItem: React.FC<ListItemProps> = ({ page, icon, title, description }) => (
     <button
@@ -89,6 +169,25 @@ const MorePage: React.FC<MorePageProps> = ({ onNavigate, onLogout }) => {
           />
         </div>
       </div>
+       <div className={`${card} mt-4`}>
+          <div className="p-4 flex items-center gap-4">
+              <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300 rounded-lg">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              </div>
+              <div>
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100">Sync to Cloud</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Export data to CSV files for backup or use in Google Sheets.</p>
+              </div>
+              <button
+                  onClick={handleExportData}
+                  disabled={isExporting}
+                  className="ml-auto flex-shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-semibold shadow hover:bg-blue-700 disabled:bg-slate-400"
+              >
+                  {isExporting ? 'Exporting...' : 'Export All'}
+              </button>
+          </div>
+      </div>
+
        <div className={`${card} mt-4`}>
           <button
             onClick={onLogout}

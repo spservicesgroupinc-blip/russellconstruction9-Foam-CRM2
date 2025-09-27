@@ -1,4 +1,5 @@
 
+
 import React, { useMemo } from 'react';
 import { EstimateRecord } from '../lib/db.ts';
 import { CompanyInfo, CustomerInfo } from './EstimatePDF.tsx';
@@ -36,7 +37,7 @@ const Invoicing: React.FC<InvoicingProps> = ({ soldJobs, customers, onPrepareInv
     const card = "rounded-2xl border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm p-4";
     const h2 = "text-xl font-semibold tracking-tight dark:text-white";
     
-// FIX: Changed component definition to React.FC to correctly type props and handle the 'key' prop.
+    // FIX: Changed component definition to React.FC to correctly type props and handle the 'key' prop.
     const JobCard: React.FC<{ job: EstimateRecord }> = ({ job }) => {
         const customer = findCustomer(job.customerId);
 
@@ -81,7 +82,7 @@ const Invoicing: React.FC<InvoicingProps> = ({ soldJobs, customers, onPrepareInv
                             <p className="text-sm text-gray-500 dark:text-slate-400 mt-3 p-3">No jobs are currently waiting for an invoice.</p>
                         ) : (
                             <ul className="mt-4 space-y-3">
-                                {pending.map(job => <JobCard key={job.estimateNumber} job={job} />)}
+                                {pending.map(job => <JobCard key={job.id} job={job} />)}
                             </ul>
                         )}
                     </div>
@@ -94,7 +95,7 @@ const Invoicing: React.FC<InvoicingProps> = ({ soldJobs, customers, onPrepareInv
                         ) : (
                             <ul className="mt-4 space-y-3">
                                 {invoiced.map(job => (
-                                    <li key={job.estimateNumber} className="flex justify-between items-center bg-green-50/50 dark:bg-green-900/30 p-4 rounded-lg border border-green-200 dark:border-green-700 opacity-80">
+                                    <li key={job.id} className="flex justify-between items-center bg-green-50/50 dark:bg-green-900/30 p-4 rounded-lg border border-green-200 dark:border-green-700 opacity-80">
                                         <div>
                                             <p className="font-semibold text-gray-800 dark:text-slate-100">{findCustomer(job.customerId)?.name || 'Unknown'}</p>
                                             <p className="text-sm text-gray-500 dark:text-slate-400">

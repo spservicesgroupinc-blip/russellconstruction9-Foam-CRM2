@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Employee, TimeEntry } from './types.ts';
 import { EstimateRecord, getActiveTimeEntry, saveTimeEntry } from '../lib/db.ts';
@@ -49,13 +48,15 @@ const AdminTimeClockView: React.FC<Omit<TimeClockPageProps, 'currentUser'>> = ({
 
     useEffect(() => {
         const initMap = async () => {
-            if (!mapRef.current) return;
+            if (!mapRef.current || map) return; // Prevent re-initialization
             try {
                 const { Map } = await window.google.maps.importLibrary("maps");
                 const mapInstance = new Map(mapRef.current as HTMLDivElement, {
                     center: { lat: 39.8283, lng: -98.5795 },
                     zoom: 4,
                     mapId: 'TIME_CLOCK_MAP',
+                    mapTypeId: 'hybrid',
+                    tilt: 45,
                 });
                 setMap(mapInstance);
                 const infoWindowInstance = new window.google.maps.InfoWindow();
@@ -64,10 +65,24 @@ const AdminTimeClockView: React.FC<Omit<TimeClockPageProps, 'currentUser'>> = ({
                 console.error("Error loading Google Maps for Time Clock", e);
             }
         };
-        if (window.google) {
+
+        const checkAndInit = () => {
+          if (window.google && window.google.maps) {
             initMap();
+            return true;
+          }
+          return false;
+        };
+  
+        if (!checkAndInit()) {
+          const interval = setInterval(() => {
+            if (checkAndInit()) {
+              clearInterval(interval);
+            }
+          }, 100);
+          return () => clearInterval(interval);
         }
-    }, []);
+    }, [map]);
 
     useEffect(() => {
         if (!map || !infoWindow) return;
@@ -110,12 +125,21 @@ const AdminTimeClockView: React.FC<Omit<TimeClockPageProps, 'currentUser'>> = ({
                     }
                 }
             }
+            
             if (locationsFound > 0) {
-                map.fitBounds(bounds);
-                if(map.getZoom() > 15) map.setZoom(15);
+                if (locationsFound === 1) {
+                    map.setCenter(bounds.getCenter());
+                    map.setZoom(18);
+                    map.setTilt(45);
+                    map.setHeading(90);
+                } else {
+                    map.fitBounds(bounds);
+                    map.setTilt(0);
+                }
             } else {
                 map.setCenter({ lat: 39.8283, lng: -98.5795 });
                 map.setZoom(4);
+                map.setTilt(0);
             }
         };
         updateMarkers();

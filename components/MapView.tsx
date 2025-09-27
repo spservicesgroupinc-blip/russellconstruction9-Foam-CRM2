@@ -1,5 +1,4 @@
-
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { CustomerInfo } from './EstimatePDF';
 
 // Declare google for TypeScript
@@ -19,10 +18,12 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
   const [map, setMap] = useState<any | null>(null);
   const [infoWindow, setInfoWindow] = useState<any | null>(null);
   const markersRef = useRef<Map<number, any>>(new Map());
+  // Ref to track customers currently being geocoded to prevent duplicate API calls
+  const geocodingInProgress = useRef(new Set<number>());
 
   useEffect(() => {
     const initMap = async () => {
-      if (!mapRef.current) return;
+      if (!mapRef.current || map) return; // Prevent re-initialization
 
       try {
         const { Map } = await window.google.maps.importLibrary("maps");
@@ -31,6 +32,8 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
           center: { lat: 39.8283, lng: -98.5795 }, // Center of US
           zoom: 4,
           mapId: 'FOAM_CRM_MAP', // Required for advanced markers
+          mapTypeId: 'hybrid',
+          tilt: 45,
         });
         setMap(mapInstance);
         
@@ -42,36 +45,55 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
       }
     };
 
-    if (window.google) {
+    const checkAndInit = () => {
+      if (window.google && window.google.maps) {
         initMap();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!map) return;
-
-    const geocodeAddress = async (customer: CustomerInfo) => {
-      try {
-        const { Geocoder } = await window.google.maps.importLibrary("geocoding");
-        const geocoder = new Geocoder();
-        geocoder.geocode({ address: customer.address }, (results: any, status: any) => {
-          if (status === 'OK' && results && results[0]) {
-            const location = results[0].geometry.location;
-            const lat = location.lat();
-            const lng = location.lng();
-            onUpdateCustomer({ ...customer, lat, lng });
-          } else {
-            console.warn(`Geocode was not successful for the following reason: ${status} for address: ${customer.address}`);
-          }
-        });
-      } catch (e) {
-        console.error("Geocoding error", e);
+        return true;
       }
+      return false;
     };
 
-    const placeMarkers = async () => {
-        if (!map || !infoWindow) return;
+    if (!checkAndInit()) {
+      const interval = setInterval(() => {
+        if (checkAndInit()) {
+          clearInterval(interval);
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [map]);
 
+
+  const geocodeAddress = useCallback((customer: CustomerInfo) => {
+    if (!customer.id || !customer.address || geocodingInProgress.current.has(customer.id)) {
+        return;
+    }
+    geocodingInProgress.current.add(customer.id);
+
+    window.google.maps.importLibrary("geocoding").then(({ Geocoder }: any) => {
+        const geocoder = new Geocoder();
+        geocoder.geocode({ address: customer.address }, (results: any, status: any) => {
+            if (status === 'OK' && results && results[0]) {
+                const location = results[0].geometry.location;
+                onUpdateCustomer({ ...customer, lat: location.lat(), lng: location.lng() });
+            } else {
+                console.warn(`Geocode failed for address "${customer.address}": ${status}`);
+            }
+            // Once complete (success or fail), remove from the in-progress set
+            geocodingInProgress.current.delete(customer.id!);
+        });
+    }).catch((e: any) => {
+        console.error("Error loading Geocoding library for address:", customer.address, e);
+        // Also remove on error
+        geocodingInProgress.current.delete(customer.id!);
+    });
+  }, [onUpdateCustomer]);
+
+
+  useEffect(() => {
+    if (!map || !infoWindow) return;
+
+    const placeMarkers = async () => {
         const { AdvancedMarkerElement } = await window.google.maps.importLibrary("marker");
         const bounds = new window.google.maps.LatLngBounds();
         let locationsFound = 0;
@@ -81,7 +103,7 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
         // Remove markers for deleted customers
         markersRef.current.forEach((marker, customerId) => {
             if (!currentCustomerIds.has(customerId)) {
-                (marker as any).map = null; // AdvancedMarkerElement uses .map
+                (marker as any).map = null;
                 markersRef.current.delete(customerId);
             }
         });
@@ -114,8 +136,8 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
                 markersRef.current.set(customer.id, marker as any);
             }
             
-          } else if (customer.address) {
-            // Geocode if lat/lng are missing
+          } else {
+            // Geocode only if address exists and not already in progress
             geocodeAddress(customer);
           }
         }
@@ -123,16 +145,23 @@ const MapView: React.FC<MapViewProps> = ({ customers, onUpdateCustomer }) => {
         if (locationsFound > 0) {
           if (locationsFound === 1) {
               map.setCenter(bounds.getCenter());
-              map.setZoom(14);
+              map.setZoom(18); // Zoom in for aerial view
+              map.setTilt(45); // Ensure tilt is enabled
+              map.setHeading(90); // Rotate for a dynamic perspective
           } else {
               map.fitBounds(bounds);
+              map.setTilt(0); // Disable tilt for broad view
+              // A slight zoom out after fitBounds can improve UX
+              window.google.maps.event.addListenerOnce(map, 'idle', () => {
+                  if (map.getZoom() > 16) map.setZoom(16);
+              });
           }
         }
     };
 
     placeMarkers();
 
-  }, [customers, map, onUpdateCustomer, infoWindow]);
+  }, [customers, map, infoWindow, geocodeAddress]);
 
   return <div ref={mapRef} className="w-full h-full" />;
 };
