@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- IMPORTANT: Replace with your actual Google Client ID -->
+    <meta name="google-client-id" content="175374680196-h783n8migree2ec4v8n2mcvlb5ecugbg.apps.googleusercontent.com">
     <title>Spray Foam Estimator Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -13,6 +15,8 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCgcu2OEs4a61Dw6MUGxv93609eNDVM3uI&v=weekly&libraries=maps,marker,geocoding"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script async defer src="https://apis.google.com/js/api.js"></script>
+    <script async defer src="https://accounts.google.com/gsi/client"></script>
   <script type="importmap">
 {
   "imports": {
@@ -21,7 +25,8 @@
     "react/": "https://aistudiocdn.com/react@^19.1.1/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.19.0",
     "dexie": "https://aistudiocdn.com/dexie@^4.2.0",
-    "@modelcontextprotocol/sdk": "https://aistudiocdn.com/@modelcontextprotocol/sdk@^0.1.0"
+    "@modelcontextprotocol/sdk": "https://aistudiocdn.com/@modelcontextprotocol/sdk@^0.1.0",
+    "@modelcontextprotocol/sdk/": "https://aistudiocdn.com/@modelcontextprotocol/sdk@^1.18.2/dist/esm/"
   }
 }
 </script>

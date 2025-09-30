@@ -42,3 +42,12 @@ export interface Task {
     createdAt: string; // ISO string
     completedAt?: string; // ISO string
 }
+
+export interface DriveFile {
+  id?: number;
+  customerId: number;
+  fileId: string;
+  fileName: string;
+  webLink: string;
+  iconLink: string;
+}

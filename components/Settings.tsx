@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { CompanyInfo } from './EstimatePDF.tsx';
 import Logo from './Logo.tsx';
@@ -63,7 +64,6 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
     const input = "mt-1 w-full rounded-lg border-slate-300 dark:border-slate-500 bg-white dark:bg-slate-600/50 px-4 py-2.5 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white";
     const small = "text-xs text-slate-500 dark:text-slate-400";
     
-    // FIX: Changed JSX.Element to React.ReactElement to resolve a namespace error.
     const ThemeButton: React.FC<{ value: Theme, label: string, icon: React.ReactElement }> = ({ value, label, icon }) => (
         <button
             type="button"

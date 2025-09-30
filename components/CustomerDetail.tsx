@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CustomerInfo } from './EstimatePDF.tsx';
 import { getEstimatesForCustomer, EstimateRecord, db, JobStatus } from '../lib/db.ts';
+import GoogleDriveManager from './GoogleDriveManager.tsx';
 
 interface CustomerDetailProps {
     customerId: number;
@@ -27,7 +28,7 @@ const getStatusBadge = (status: JobStatus) => {
 
 const fmtCurrency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-type ActiveTab = 'jobs' | 'documents' | 'notes';
+type ActiveTab = 'jobs' | 'documents' | 'notes' | 'files';
 
 interface DocumentRecord {
     type: 'Estimate' | 'Material Order' | 'Invoice' | 'Quote Summary';
@@ -206,7 +207,7 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack, onV
             <div>
                 <div className="border-b border-slate-200 dark:border-slate-600">
                     <nav className="flex -mb-px space-x-6" aria-label="Tabs">
-                        {(['jobs', 'documents', 'notes'] as ActiveTab[]).map(tab => (
+                        {(['jobs', 'documents', 'files', 'notes'] as ActiveTab[]).map(tab => (
                             <button key={tab} onClick={() => setActiveTab(tab)}
                                 className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
                                     activeTab === tab 
@@ -252,6 +253,9 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack, onV
                                 </div>
                              ))}
                         </div>
+                    )}
+                    {activeTab === 'files' && (
+                        <GoogleDriveManager customerId={customerId} />
                     )}
                     {activeTab === 'notes' && (
                         <div>

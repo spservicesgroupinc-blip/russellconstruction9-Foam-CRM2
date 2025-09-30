@@ -27,6 +27,7 @@ import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
 import { Job, Employee, Task } from './components/types.ts';
 import Logo from './components/Logo.tsx';
+import CloudSync from './components/CloudSync.tsx';
 
 export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
 
@@ -533,6 +534,9 @@ const App: React.FC = () => {
 
         {currentUser && (
             <>
+                {currentUser.role === 'admin' && (
+                    <CloudSync customers={customers} jobs={jobs} />
+                )}
                 <GeminiAgent 
                     setMainPage={setPage}
                     customers={customers}
