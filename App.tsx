@@ -19,14 +19,14 @@ import TeamPage from './components/TeamPage.tsx';
 import MorePage from './components/MorePage.tsx';
 import TimeClockPage from './components/TimeClockPage.tsx';
 import InventoryPage from './components/InventoryPage.tsx';
-import QuickAddFAB from './components/QuickAddFAB.tsx';
-import LoginScreen from './components/LoginScreen.tsx';
-import Header from './components/Header.tsx';
+// FIX: Import the missing EmployeeDashboard component.
 import EmployeeDashboard from './components/EmployeeDashboard.tsx';
+import LoginScreen from './components/LoginScreen.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
 import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
 import { Job, Employee, Task } from './components/types.ts';
+import Logo from './components/Logo.tsx';
 
 export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
 
@@ -395,14 +395,14 @@ const App: React.FC = () => {
     // Admin Tabs
     if (['dashboard'].includes(currentPage)) return 'dashboard';
     if (['customers', 'customerDetail'].includes(currentPage)) return 'customers';
-    if (['calculator', 'costing'].includes(currentPage)) return 'calculator';
-    if (['schedule'].includes(currentPage)) return 'schedule';
-    if (['more', 'jobsList', 'jobDetail', 'invoicing', 'team', 'settings', 'materialOrder', 'gantt', 'inventory', 'timeclock'].includes(currentPage)) return 'more';
+    if (['calculator', 'costing', 'jobDetail', 'invoicing'].includes(currentPage)) return 'calculator'; // Grouping for active state
+    if (['schedule', 'gantt'].includes(currentPage)) return 'schedule';
+    if (['more', 'jobsList', 'team', 'settings', 'materialOrder', 'inventory', 'timeclock', 'map'].includes(currentPage)) return 'more';
     return 'dashboard'; // fallback
   }
   const activeTab = getActiveTab(page);
 
-  const NavButton: React.FC<{
+  const MobileNavButton: React.FC<{
     target: Page;
     label: string;
     icon: React.ReactElement;
@@ -416,6 +416,26 @@ const App: React.FC = () => {
       }`}
     >
       {icon}
+      <span>{label}</span>
+    </button>
+  );
+
+  const SidebarNavButton: React.FC<{
+    target: Page;
+    label: string;
+    icon: React.ReactElement;
+    active: boolean;
+  }> = ({ target, label, icon, active }) => (
+    <button
+      onClick={() => setPage(target)}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-semibold ${
+        active
+          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
+          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+      }`}
+    >
+      {/* FIX: Cast the icon to allow adding a className prop, resolving a TypeScript error. */}
+      {React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5 flex-shrink-0"})}
       <span>{label}</span>
     </button>
   );
@@ -462,16 +482,57 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 font-sans">
-        {currentUser && companyInfo && (
-            <Header user={{ name: currentUser.role === 'admin' ? 'Admin' : currentUser.data.name }} onLogout={handleLogout} />
+    <div className="flex h-screen bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 font-sans">
+        
+        {/* DESKTOP SIDEBAR */}
+        {currentUser && (
+            <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-center h-24 items-center">
+                    <Logo />
+                </div>
+                
+                <div className="flex-grow p-4 space-y-1">
+                    {currentUser.role === 'admin' ? (
+                        <>
+                            <div className="space-y-3 mb-4">
+                                <button onClick={handleFabNewEstimate} className="w-full text-center rounded-lg bg-blue-600 px-4 py-2 text-sm text-white font-semibold shadow hover:bg-blue-700 transition-colors">
+                                    + New Job / Estimate
+                                </button>
+                                <button onClick={handleFabNewCustomer} className="w-full text-center rounded-lg bg-slate-200 dark:bg-slate-700 px-4 py-2 text-sm text-slate-800 dark:text-slate-100 font-semibold shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
+                                    + New Customer
+                                </button>
+                            </div>
+                            <SidebarNavButton target="dashboard" label="Dashboard" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} active={activeTab === 'dashboard'} />
+                            <SidebarNavButton target="customers" label="Clients" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} active={activeTab === 'customers'} />
+                            <SidebarNavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} active={activeTab === 'schedule'} />
+                            <SidebarNavButton target="more" label="More..." icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} active={activeTab === 'more'} />
+                        </>
+                    ) : (
+                        <>
+                            <SidebarNavButton target="employeeDashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} active={activeTab === 'employeeDashboard'} />
+                            <SidebarNavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} active={activeTab === 'schedule'} />
+                            <SidebarNavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} active={activeTab === 'timeclock'} />
+                        </>
+                    )}
+                </div>
+
+                 <div className="p-4 mt-auto border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-sm font-semibold truncate">{currentUser.role === 'admin' ? 'Admin' : currentUser.data.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser.role === 'admin' ? 'Administrator' : currentUser.data.role}</p>
+                    {/* FIX: Use the correct handler function `handleLogout` for the onClick event. */}
+                    <button onClick={handleLogout} className="text-sm font-medium text-red-500 hover:underline mt-2">Logout</button>
+                </div>
+            </aside>
         )}
-        <main className={`flex-grow overflow-y-auto ${currentUser ? 'pt-16 pb-24' : ''}`}>
-            {renderPage()}
-        </main>
+
+        <div className="flex-1 flex flex-col overflow-hidden">
+            <main className={`flex-grow overflow-y-auto ${currentUser ? 'pb-24 md:pb-0' : ''}`}>
+                {renderPage()}
+            </main>
+        </div>
+
         {currentUser && (
             <>
-                {currentUser.role === 'admin' && <QuickAddFAB onNewEstimate={handleFabNewEstimate} onNewCustomer={handleFabNewCustomer} />}
                 <GeminiAgent 
                     setMainPage={setPage}
                     customers={customers}
@@ -492,22 +553,23 @@ const App: React.FC = () => {
                     jobs={jobs}
                     handleUpdateJob={handleUpdateJob}
                 />
-                <nav className="fixed bottom-0 left-0 right-0 z-[100] bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-2 shadow-t-lg">
+                {/* MOBILE BOTTOM NAV */}
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-2 shadow-t-lg">
                     <div className="mx-auto max-w-md grid grid-cols-5 gap-2">
                         {currentUser.role === 'admin' ? (
                             <>
-                                <NavButton target="dashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
-                                <NavButton target="customers" label="Clients" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
-                                <NavButton target="calculator" label="New Job" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} />
-                                <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
-                                <NavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
+                                <MobileNavButton target="dashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
+                                <MobileNavButton target="customers" label="Clients" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} />
+                                <MobileNavButton target="calculator" label="New Job" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>} />
+                                <MobileNavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+                                <MobileNavButton target="more" label="More" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>} />
                             </>
                         ) : (
                              <>
-                                <NavButton target="employeeDashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
-                                <NavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
+                                <MobileNavButton target="employeeDashboard" label="Home" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>} />
+                                <MobileNavButton target="schedule" label="Schedule" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>} />
                                 <div className="w-full"></div>
-                                <NavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
+                                <MobileNavButton target="timeclock" label="Time Clock" icon={<svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} />
                                 <div className="w-full"></div>
                              </>
                         )}

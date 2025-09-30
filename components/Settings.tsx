@@ -134,7 +134,10 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                                 <div>
                                     <h3 className="font-medium text-slate-700 dark:text-slate-200">Material Yields</h3>
                                     <div className="mt-2 grid grid-cols-2 gap-3">
-{/* FIX: Removed invalid 'number' attribute from the span element. */}
+                                        {/* FIX: Corrected malformed JSX that was causing two errors:
+                                            1. An invalid 'number' attribute was passed to a span.
+                                            2. The 'handleYieldsChange' function was being rendered as a child node.
+                                        */}
                                         <label className="block"><span className={label}>Open-cell yield</span><input type="number" min={1} step={1} className={input} name="openCellYield" value={appSettings.defaultYields.openCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                         <label className="block"><span className={label}>Closed-cell yield</span><input type="number" min={1} step={1} className={input} name="closedCellYield" value={appSettings.defaultYields.closedCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                     </div>

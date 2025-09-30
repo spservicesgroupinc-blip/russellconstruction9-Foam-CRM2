@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { EstimateRecord, JobStatus } from '../lib/db.ts';
 import { Task, Employee } from '../components/types.ts';
-import Logo from './Logo.tsx';
 
 interface DashboardProps {
     jobs: EstimateRecord[];
@@ -202,9 +201,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     );
 
     return (
-        <div className="mx-auto max-w-3xl p-4 font-sans">
-            <Logo />
-            <div className="grid grid-cols-2 gap-4">
+        <div className="mx-auto max-w-4xl p-4 md:p-6 font-sans">
+             <div className="mb-6">
+                <h1 className="text-3xl font-bold dark:text-white">Dashboard</h1>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <MetricCard 
                     label="Total Revenue (Paid)" 
                     value={fmtCurrency(metrics.totalRevenuePaid, { minimumFractionDigits: 0 })} 
@@ -245,50 +246,52 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </button>
             </div>
 
-            <div className="mt-6">
-                <div className="flex justify-between items-center px-1 mb-2">
-                    <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Tasks</h2>
-                    <button onClick={() => handleOpenTaskModal(null)} className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white font-semibold shadow-sm hover:bg-blue-700 transition-colors">
-                        + Add Task
-                    </button>
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                    <div className="flex justify-between items-center px-1 mb-2">
+                        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Tasks</h2>
+                        <button onClick={() => handleOpenTaskModal(null)} className="rounded-lg bg-blue-600 px-3 py-1 text-sm text-white font-semibold shadow-sm hover:bg-blue-700 transition-colors">
+                            + Add Task
+                        </button>
+                    </div>
+                    <div className={`${card} p-2`}>
+                        {incompleteTasks.length === 0 && completedTasks.length === 0 ? (
+                            <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">No tasks yet. Click "+ Add Task" to create one.</p>
+                        ) : (
+                            <div className="divide-y divide-slate-100 dark:divide-slate-600">
+                                {incompleteTasks.map(task => <TaskItem key={task.id} task={task} />)}
+                                {completedTasks.length > 0 && (
+                                    <details className="p-2 text-sm">
+                                        <summary className="cursor-pointer font-medium text-slate-500 dark:text-slate-400">Recently Completed ({completedTasks.length})</summary>
+                                        <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-600">
+                                            {completedTasks.map(task => <TaskItem key={task.id} task={task} />)}
+                                        </div>
+                                    </details>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
-                <div className={`${card} p-2`}>
-                    {incompleteTasks.length === 0 && completedTasks.length === 0 ? (
-                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">No tasks yet. Click "+ Add Task" to create one.</p>
-                    ) : (
-                        <div className="divide-y divide-slate-100 dark:divide-slate-600">
-                            {incompleteTasks.map(task => <TaskItem key={task.id} task={task} />)}
-                            {completedTasks.length > 0 && (
-                                <details className="p-2 text-sm">
-                                    <summary className="cursor-pointer font-medium text-slate-500 dark:text-slate-400">Recently Completed ({completedTasks.length})</summary>
-                                    <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-600">
-                                        {completedTasks.map(task => <TaskItem key={task.id} task={task} />)}
-                                    </div>
-                                </details>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
 
-             <div className="mt-6">
-                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 px-1 mb-2">Recent Jobs</h2>
-                <div className={`${card} p-2`}>
-                    {recentJobs.length > 0 ? (
-                        <div className="space-y-1">
-                            {recentJobs.map(job => (
-                                <button key={job.id} onClick={() => onViewJob(job)} className="w-full text-left p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-600/50 transition-colors flex justify-between items-center">
-                                    <div>
-                                        <p className="font-semibold text-slate-700 dark:text-slate-200">{job.calcData?.customer?.name || 'Unknown'}</p>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">{job.estimateNumber}</p>
-                                    </div>
-                                    <p className="font-bold text-sm text-slate-800 dark:text-slate-50">{fmtCurrency(job.costsData?.finalQuote || 0)}</p>
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">No jobs created yet.</p>
-                    )}
+                 <div>
+                    <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 px-1 mb-2">Recent Jobs</h2>
+                    <div className={`${card} p-2`}>
+                        {recentJobs.length > 0 ? (
+                            <div className="space-y-1">
+                                {recentJobs.map(job => (
+                                    <button key={job.id} onClick={() => onViewJob(job)} className="w-full text-left p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-600/50 transition-colors flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-slate-700 dark:text-slate-200">{job.calcData?.customer?.name || 'Unknown'}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">{job.estimateNumber}</p>
+                                        </div>
+                                        <p className="font-bold text-sm text-slate-800 dark:text-slate-50">{fmtCurrency(job.costsData?.finalQuote || 0)}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">No jobs created yet.</p>
+                        )}
+                    </div>
                 </div>
             </div>
 
