@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie';
 import { CustomerInfo, Costs } from '../components/EstimatePDF.tsx';
 import { CalculationResults } from '../components/SprayFoamCalculator.tsx';
-import { TimeEntry, Employee, Task, DriveFile } from '../components/types.ts';
+import { TimeEntry, Employee, Task, DriveFile, Automation } from '../components/types.ts';
 
 export type JobStatus = 'estimate' | 'sold' | 'invoiced' | 'paid';
 
@@ -36,20 +36,22 @@ export class AppDatabase extends Dexie {
   inventory!: Table<InventoryItem, number>;
   tasks!: Table<Task, number>;
   drive_files!: Table<DriveFile, number>;
+  automations!: Table<Automation, number>;
 
   constructor() {
     super('foamCrmDatabase');
     // FIX: Cast `this` to `Dexie` to resolve a TypeScript type error where the `version`
     // method was not found on the subclass. This helps the type checker understand
     // that the `AppDatabase` instance has all methods of a `Dexie` instance.
-    (this as Dexie).version(8).stores({
+    (this as Dexie).version(9).stores({
       customers: '++id, name, address',
       estimates: '++id, customerId, estimateNumber, status, createdAt',
       employees: '++id, name',
       time_log: '++id, employeeId, jobId, startTime, endTime, startLat, startLng, endLat, endLng, durationHours',
       inventory: '++id, name, category',
       tasks: '++id, completed, dueDate, createdAt',
-      drive_files: '++id, customerId, fileId'
+      drive_files: '++id, customerId, fileId',
+      automations: '++id, name, trigger_type, is_enabled',
     });
   }
 }

@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import SprayFoamCalculator, { CalculationResults, CalculatorInputs, InventoryLineItem } from './components/SprayFoamCalculator.tsx';
 import JobCosting from './components/JobCosting.tsx';
@@ -25,11 +26,13 @@ import LoginScreen from './components/LoginScreen.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
 import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
-import { Job, Employee, Task } from './components/types.ts';
+import { Job, Employee, Task, Automation } from './components/types.ts';
 import Logo from './components/Logo.tsx';
 import CloudSync from './components/CloudSync.tsx';
+import AutomationPage from './components/AutomationPage.tsx';
+import { processAutomations } from './lib/automations.ts';
 
-export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard';
+export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard' | 'automations';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -43,6 +46,19 @@ export interface AppSettings {
   };
   defaultCosts: CostSettings;
 }
+
+const DEFAULT_COMPANY_INFO: CompanyInfo = {
+  name: 'Spray Foam Pro',
+  address: '123 Insulation Way, Buildtown, USA 54321',
+  phone: '(555) 867-5309',
+  email: 'quotes@sprayfoampro.io',
+};
+
+const DEFAULT_APP_SETTINGS: AppSettings = {
+    theme: 'system',
+    defaultYields: { openCellYield: 16000, closedCellYield: 4000 },
+    defaultCosts: DEFAULT_COST_SETTINGS,
+};
 
 const DEFAULT_CALCULATOR_INPUTS: CalculatorInputs = {
   calculatorType: 'building',
@@ -77,20 +93,16 @@ function isJobArray(obj: any): obj is Job[] {
 
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<CurrentUser>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser>({ role: 'admin' });
   const [page, setPage] = useState<Page>('dashboard');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
-  const [appSettings, setAppSettings] = useState<AppSettings>({
-    theme: 'system',
-    defaultYields: { openCellYield: 16000, closedCellYield: 4000 },
-    defaultCosts: DEFAULT_COST_SETTINGS,
-  });
-  const [isInitialSetup, setIsInitialSetup] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [customers, setCustomers] = useState<CustomerInfo[]>([]);
   const [jobs, setJobs] = useState<EstimateRecord[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [automations, setAutomations] = useState<Automation[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | ''>('');
   const [calculatorInputs, setCalculatorInputs] = useState<CalculatorInputs>(DEFAULT_CALCULATOR_INPUTS);
   const [calculationResults, setCalculationResults] = useState<CalculationResults | null>(null);
@@ -131,6 +143,29 @@ const App: React.FC = () => {
     }
   }, [calendarJobs]);
 
+  const addCalendarJob = (job: Omit<Job, 'id'>): Job => {
+    const newJob: Job = { ...job, id: Date.now().toString() };
+    setCalendarJobs(prev => [...prev, newJob]);
+    return newJob;
+  };
+
+    // Task Handlers
+    const handleAddTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => {
+        const newTask: Omit<Task, 'id'> = {
+            ...task,
+            completed: false,
+            createdAt: new Date().toISOString(),
+        };
+        const newId = await db.tasks.add(newTask as Task);
+        const addedTask = { ...newTask, id: newId };
+        setTasks(prev => [addedTask, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        return addedTask;
+    };
+
+    const automationActionHandlers = {
+        createTask: handleAddTask,
+        addToSchedule: addCalendarJob,
+    };
 
   const loadData = useCallback(async () => {
     const savedInfo = localStorage.getItem('companyInfo');
@@ -148,7 +183,10 @@ const App: React.FC = () => {
         closedCellYield: parsedSettings.defaultYields.closedCellYield,
       }));
     } else {
-      setIsInitialSetup(true);
+      setCompanyInfo(DEFAULT_COMPANY_INFO);
+      setAppSettings(DEFAULT_APP_SETTINGS);
+      localStorage.setItem('companyInfo', JSON.stringify(DEFAULT_COMPANY_INFO));
+      localStorage.setItem('appSettings', JSON.stringify(DEFAULT_APP_SETTINGS));
     }
     
     const allCustomers = await db.customers.toArray();
@@ -161,6 +199,8 @@ const App: React.FC = () => {
     setInventoryItems(allItems);
     const allTasks = await db.tasks.orderBy('createdAt').reverse().toArray();
     setTasks(allTasks);
+    const allAutomations = await db.automations.toArray();
+    setAutomations(allAutomations);
   }, []);
 
 
@@ -188,17 +228,17 @@ const App: React.FC = () => {
     localStorage.setItem('appSettings', JSON.stringify(settings));
     setCompanyInfo(info);
     setAppSettings(settings);
-    if (isInitialSetup) {
-      setIsInitialSetup(false);
-      // Don't auto-navigate, let the user click the login button
-    }
   };
 
   const handleAddCustomer = async (customer: Omit<CustomerInfo, 'id'>) => {
     const newId = await db.customers.add(customer as CustomerInfo);
-    const newCustomer = { ...customer, id: newId };
-    setCustomers(prev => [...prev, newCustomer]);
-    return newCustomer;
+    const newCustomerWithId = { ...customer, id: newId };
+    setCustomers(prev => [...prev, newCustomerWithId]);
+    
+    // Process automations
+    processAutomations('new_customer', newCustomerWithId, automations, automationActionHandlers);
+    
+    return newCustomerWithId;
   };
 
   const handleSaveNewCustomer = async (e: React.FormEvent) => {
@@ -259,16 +299,29 @@ const App: React.FC = () => {
   }
 
   const handleUpdateJob = async (jobId: number, updates: Partial<Omit<EstimateRecord, 'id'>>) => {
-      await db.estimates.update(jobId, updates);
       const originalJob = jobs.find(j => j.id === jobId);
       if (!originalJob) return;
 
+      await db.estimates.update(jobId, updates);
+      
       const updatedJob = { ...originalJob, ...updates };
 
       setJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
 
       if (currentJob?.id === jobId) {
           setCurrentJob(updatedJob);
+      }
+
+      // Process automations if status changed
+      if (updates.status && updates.status !== originalJob.status) {
+          const jobWithCustomer = {
+              ...updatedJob,
+              calcData: {
+                  ...updatedJob.calcData,
+                  customer: customers.find(c => c.id === updatedJob.customerId)
+              }
+          };
+          processAutomations('job_status_updated', jobWithCustomer, automations, automationActionHandlers);
       }
   };
 
@@ -312,12 +365,6 @@ const App: React.FC = () => {
     setCalculationResults(null);
   };
   
-  const addCalendarJob = (job: Omit<Job, 'id'>): Job => {
-    const newJob: Job = { ...job, id: Date.now().toString() };
-    setCalendarJobs(prev => [...prev, newJob]);
-    return newJob;
-  };
-  
   const updateCalendarJob = (job: Job) => {
     setCalendarJobs(prev => prev.map(j => j.id === job.id ? job : j));
   };
@@ -351,17 +398,23 @@ const App: React.FC = () => {
     setPage('dashboard'); // Reset to default
   };
 
-  // Task Handlers
-    const handleAddTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => {
-        const newTask: Omit<Task, 'id'> = {
-            ...task,
-            completed: false,
-            createdAt: new Date().toISOString(),
-        };
-        const newId = await db.tasks.add(newTask as Task);
-        const addedTask = { ...newTask, id: newId };
-        setTasks(prev => [addedTask, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    };
+  // Automation Handlers
+  const handleAddAutomation = async (automation: Omit<Automation, 'id'>) => {
+      const newId = await db.automations.add(automation as Automation);
+      const newAutomation = { ...automation, id: newId };
+      setAutomations(prev => [...prev, newAutomation]);
+  };
+
+  const handleUpdateAutomation = async (automation: Automation) => {
+      await db.automations.put(automation);
+      setAutomations(prev => prev.map(a => a.id === automation.id ? automation : a));
+  };
+
+  const handleDeleteAutomation = async (automationId: number) => {
+      await db.automations.delete(automationId);
+      setAutomations(prev => prev.filter(a => a.id !== automationId));
+  };
+
 
     const handleUpdateTask = async (task: Task) => {
         await db.tasks.put(task);
@@ -398,7 +451,7 @@ const App: React.FC = () => {
     if (['customers', 'customerDetail'].includes(currentPage)) return 'customers';
     if (['calculator', 'costing', 'jobDetail', 'invoicing'].includes(currentPage)) return 'calculator'; // Grouping for active state
     if (['schedule', 'gantt'].includes(currentPage)) return 'schedule';
-    if (['more', 'jobsList', 'team', 'settings', 'materialOrder', 'inventory', 'timeclock', 'map'].includes(currentPage)) return 'more';
+    if (['more', 'jobsList', 'team', 'settings', 'materialOrder', 'inventory', 'timeclock', 'map', 'automations'].includes(currentPage)) return 'more';
     return 'dashboard'; // fallback
   }
   const activeTab = getActiveTab(page);
@@ -454,7 +507,6 @@ const App: React.FC = () => {
     }
 
     if (!currentUser) { // Public/Login
-      if (isInitialSetup) return <Settings onSave={handleSaveSettings} appSettings={appSettings} isInitialSetup />;
       return <LoginScreen onLogin={handleLogin} />;
     }
 
@@ -478,6 +530,7 @@ const App: React.FC = () => {
       case 'more': return <MorePage onNavigate={setPage} onLogout={handleLogout} />;
       case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} />;
       case 'inventory': return <InventoryPage items={inventoryItems} onAddItem={handleAddInventoryItem} onUpdateItem={handleUpdateInventoryItem} onDeleteItem={handleDeleteInventoryItem} />;
+      case 'automations': return <AutomationPage automations={automations} onAddAutomation={handleAddAutomation} onUpdateAutomation={handleUpdateAutomation} onDeleteAutomation={handleDeleteAutomation} />;
       default: return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(status) => { setFilter(status); setPage('jobsList'); }} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
     }
   };

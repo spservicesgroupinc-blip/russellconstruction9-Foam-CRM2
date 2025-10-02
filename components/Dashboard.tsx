@@ -9,7 +9,8 @@ interface DashboardProps {
     onNavigate: (page: 'materialOrder') => void;
     tasks: Task[];
     employees: Employee[];
-    onAddTask: (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => Promise<void>;
+    // FIX: Changed the return type from Promise<void> to Promise<Task> to align with the handleAddTask function in App.tsx, which is required by the automations feature.
+    onAddTask: (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => Promise<Task>;
     onUpdateTask: (task: Task) => Promise<void>;
     onDeleteTask: (taskId: number) => Promise<void>;
     onToggleTaskCompletion: (taskId: number) => Promise<void>;

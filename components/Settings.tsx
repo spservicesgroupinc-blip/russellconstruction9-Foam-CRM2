@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect } from 'react';
 import { CompanyInfo } from './EstimatePDF.tsx';
 import Logo from './Logo.tsx';
@@ -134,10 +135,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                                 <div>
                                     <h3 className="font-medium text-slate-700 dark:text-slate-200">Material Yields</h3>
                                     <div className="mt-2 grid grid-cols-2 gap-3">
-                                        {/* FIX: Corrected malformed JSX that was causing two errors:
-                                            1. An invalid 'number' attribute was passed to a span.
-                                            2. The 'handleYieldsChange' function was being rendered as a child node.
-                                        */}
+                                        {/* FIX: Corrected malformed JSX for the 'Open-cell yield' input, which had a misplaced event handler and an invalid attribute on a child span. */}
                                         <label className="block"><span className={label}>Open-cell yield</span><input type="number" min={1} step={1} className={input} name="openCellYield" value={appSettings.defaultYields.openCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                         <label className="block"><span className={label}>Closed-cell yield</span><input type="number" min={1} step={1} className={input} name="closedCellYield" value={appSettings.defaultYields.closedCellYield} onChange={handleYieldsChange} /><span className={small}>bf/set</span></label>
                                     </div>
@@ -152,7 +150,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, currentInfo, appSettings: i
                                         <label className="block"><span className={label}>Labor Rate ($/hr)</span><input type="number" min={0} className={input} name="laborRate" value={appSettings.defaultCosts.laborRate} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>Equipment Fee ($)</span><input type="number" min={0} className={input} name="equipmentFee" value={appSettings.defaultCosts.equipmentFee} onChange={handleCostsChange} /></label>
                                         <label className="block"><span className={label}>Overhead (%)</span><input type="number" min={0} className={input} name="overheadPercentage" value={appSettings.defaultCosts.overheadPercentage} onChange={handleCostsChange} /></label>
-                                        <label className="block"><span className="label}>Sales Tax (%)</span><input type="number" min={0} className={input} name="salesTax" value={appSettings.defaultCosts.salesTax} onChange={handleCostsChange} /></label>
+                                        <label className="block"><span className={label}>Sales Tax (%)</span><input type="number" min={0} className={input} name="salesTax" value={appSettings.defaultCosts.salesTax} onChange={handleCostsChange} /></label>
                                     </div>
                                 </div>
                              </div>

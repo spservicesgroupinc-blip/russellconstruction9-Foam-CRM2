@@ -51,3 +51,23 @@ export interface DriveFile {
   webLink: string;
   iconLink: string;
 }
+
+// --- Automation Types ---
+export type TriggerType = 'new_customer' | 'job_status_updated';
+export type ActionType = 'webhook' | 'create_task' | 'add_to_schedule';
+
+export interface Automation {
+    id?: number;
+    name: string;
+    trigger_type: TriggerType;
+    trigger_config: {
+        to_status?: string; // e.g., 'sold'
+    };
+    action_type: ActionType;
+    action_config: {
+        url?: string; // for webhook
+        task_title?: string;
+        task_description?: string;
+    };
+    is_enabled: boolean;
+}
