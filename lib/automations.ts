@@ -1,12 +1,15 @@
+
 import { Automation, Task, Job } from '../components/types.ts';
 import { EstimateRecord } from './db.ts';
-import { CustomerInfo } from '../components/EstimatePDF.tsx';
+import { CustomerInfo } from '../components/PDF.tsx';
 import { fmtInput } from '../components/utils.ts';
 
 // Type for the action handler functions passed from App.tsx
 interface ActionHandlers {
     createTask: (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => Promise<Task>;
     addToSchedule: (job: Omit<Job, 'id'>) => Job;
+    sendEmail: (to: string, subject: string, body: string) => Promise<void>;
+    deductInventoryForJob: (job: EstimateRecord) => Promise<void>;
 }
 
 // Function to replace placeholders like [customer_name] in strings
@@ -88,6 +91,25 @@ const executeAction = async (automation: Automation, data: CustomerInfo | Estima
                     color: '#3498DB',
                     links: [],
                 });
+            }
+            break;
+        
+        case 'send_email':
+            const customerEmail = (data as any).calcData?.customer?.email || (data as CustomerInfo).email;
+            if (customerEmail && automation.action_config.email_subject) {
+                const subject = replacePlaceholders(automation.action_config.email_subject, data);
+                const body = replacePlaceholders(automation.action_config.email_body || '', data);
+                await handlers.sendEmail(customerEmail, subject, body);
+            } else {
+                console.warn(`Automation "${automation.name}" skipped: No customer email found.`);
+            }
+            break;
+
+        case 'update_inventory':
+            if ('estimateNumber' in data) { // Check if data is an EstimateRecord
+                await handlers.deductInventoryForJob(data as EstimateRecord);
+            } else {
+                console.warn(`Automation "${automation.name}" skipped: 'update_inventory' action can only be triggered by job-related events.`);
             }
             break;
     }

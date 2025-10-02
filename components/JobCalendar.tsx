@@ -4,7 +4,7 @@ import { toDate, addDays, diffInDays, fmtInput, startOfDay } from './utils.ts';
 import Toolbar from './Toolbar.tsx';
 import JobEditorModal from './JobEditorModal.tsx';
 import { EstimateRecord } from '../lib/db.ts';
-import { CurrentUser } from '../App.tsx';
+import { CurrentUser, Page } from '../App.tsx';
 
 interface JobCalendarProps {
   jobToSchedule: EstimateRecord | null;
@@ -13,9 +13,10 @@ interface JobCalendarProps {
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
   employees: Employee[];
   currentUser: CurrentUser;
+  onNavigate: (page: Page) => void;
 }
 
-const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled, jobs, setJobs, employees, currentUser }) => {
+const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled, jobs, setJobs, employees, currentUser, onNavigate }) => {
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -161,6 +162,7 @@ const JobCalendar: React.FC<JobCalendarProps> = ({ jobToSchedule, onJobScheduled
         onNextMonth={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
         onPreviousMonth={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
         onGoToToday={() => setCurrentMonth(new Date())}
+        onNavigate={onNavigate}
       />
       <div className="flex-grow overflow-auto p-4">
         <div className="bg-white dark:bg-slate-700 shadow-lg rounded-lg border border-slate-200 dark:border-slate-600 flex flex-col min-h-[600px]">

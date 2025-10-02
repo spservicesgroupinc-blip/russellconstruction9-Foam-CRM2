@@ -3,6 +3,8 @@ import { Job, EditingJob, Employee } from './types.ts';
 import { toDate, addDays, diffInDays, minDate, maxDate, getMidpointDate } from './utils.ts';
 import GanttChart from './GanttChart.tsx';
 import JobEditorModal from './JobEditorModal.tsx';
+import ScheduleViewToggle from './ScheduleViewToggle.tsx';
+import { Page } from '../App.tsx';
 
 // Custom hook to detect if the screen is mobile-sized
 const useIsMobile = (breakpoint = 768): boolean => {
@@ -24,9 +26,10 @@ interface GanttPageProps {
   jobs: Job[];
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
   employees: Employee[];
+  onNavigate: (page: Page) => void;
 }
 
-const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs, employees }) => {
+const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs, employees, onNavigate }) => {
   const [pxPerDay, setPxPerDay] = useState(40);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const isMobile = useIsMobile();
@@ -130,7 +133,7 @@ const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs, employees }) => {
 
   return (
     <div className="flex flex-col h-full bg-slate-100 dark:bg-slate-800">
-      <div className="bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm border-b border-slate-200 dark:border-slate-600/50 p-2 flex flex-wrap items-center justify-between gap-2 sticky top-0 z-20">
+      <div className="bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm border-b border-slate-200 dark:border-slate-600/50 p-2 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20">
         <div className="flex items-center gap-1">
             <button onClick={() => setChartStartDate(addDays(chartStartDate, -14))} className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 hidden sm:block">{'<<'}</button>
             <button onClick={() => setChartStartDate(addDays(chartStartDate, -7))} className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600">{'<'}</button>
@@ -138,6 +141,9 @@ const GanttPage: React.FC<GanttPageProps> = ({ jobs, setJobs, employees }) => {
             <button onClick={() => setChartStartDate(addDays(chartStartDate, 7))} className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600">{'>'}</button>
             <button onClick={() => setChartStartDate(addDays(chartStartDate, 14))} className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 hidden sm:block">{'>>'}</button>
         </div>
+        
+        <ScheduleViewToggle currentView="gantt" onNavigate={onNavigate} />
+
         <div className="flex items-center gap-2">
             <button onClick={centerOnJobs} title="Center on Jobs" className="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600">
                 <svg className="w-5 h-5 text-slate-600 dark:text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

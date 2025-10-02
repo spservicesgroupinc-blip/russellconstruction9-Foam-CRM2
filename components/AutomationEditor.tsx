@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Automation, TriggerType, ActionType } from './types.ts';
 import { JobStatus } from '../lib/db.ts';
@@ -12,7 +13,7 @@ const EMPTY_AUTOMATION: Omit<Automation, 'id'> = {
     name: '',
     trigger_type: 'new_customer',
     trigger_config: {},
-    action_type: 'webhook',
+    action_type: 'create_task',
     action_config: {},
     is_enabled: true,
 };
@@ -83,9 +84,11 @@ const AutomationEditor: React.FC<AutomationEditorProps> = ({ existingAutomation,
                              <label className="block mt-2">
                                 <span className={labelClass}>Do this (Action)</span>
                                 <select value={automation.action_type} onChange={e => handleFieldChange('action_type', e.target.value as ActionType)} className={selectClass}>
-                                    <option value="webhook">Trigger a webhook</option>
                                     <option value="create_task">Create a new task</option>
+                                    <option value="send_email">Send an email</option>
+                                    <option value="update_inventory">Update inventory stock</option>
                                     <option value="add_to_schedule">Add job to schedule</option>
+                                    <option value="webhook">Trigger a webhook</option>
                                 </select>
                             </label>
                             {automation.action_type === 'webhook' && (
@@ -105,6 +108,25 @@ const AutomationEditor: React.FC<AutomationEditorProps> = ({ existingAutomation,
                                         <textarea value={automation.action_config.task_description || ''} onChange={e => handleConfigChange('action_config', 'task_description', e.target.value)} rows={2} className={inputClass}></textarea>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">You can use placeholders like [customer_name], [job_number], etc.</p>
                                     </label>
+                                </div>
+                            )}
+                            {automation.action_type === 'send_email' && (
+                                <div className="mt-2 space-y-2">
+                                    <label className="block">
+                                        <span className={labelClass}>Email Subject</span>
+                                        <input type="text" value={automation.action_config.email_subject || ''} onChange={e => handleConfigChange('action_config', 'email_subject', e.target.value)} className={inputClass} required />
+                                    </label>
+                                    <label className="block">
+                                        <span className={labelClass}>Email Body</span>
+                                        <textarea value={automation.action_config.email_body || ''} onChange={e => handleConfigChange('action_config', 'email_body', e.target.value)} rows={4} className={inputClass}></textarea>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Placeholders available: [customer_name], [job_number], [job_value].</p>
+                                    </label>
+                                </div>
+                            )}
+                            {automation.action_type === 'update_inventory' && (
+                                <div className="mt-2 p-3 bg-slate-100 dark:bg-slate-700 rounded-md">
+                                    <p className="text-sm text-slate-700 dark:text-slate-200">This action will automatically deduct the required open-cell and closed-cell foam sets for the job from your inventory.</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Requires items named "Open-Cell Set" and "Closed-Cell Set" in your inventory.</p>
                                 </div>
                             )}
                         </div>

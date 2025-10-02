@@ -5,8 +5,9 @@ import EstimatePDF, { CompanyInfo, CustomerInfo, Costs } from './EstimatePDF.tsx
 import MaterialOrderPDF from './MaterialOrderPDF.tsx';
 import QuoteSummaryPDF from './QuoteSummaryPDF.tsx';
 import InvoicePDF from './InvoicePDF.tsx';
-import { saveEstimate, EstimateRecord, getTimeEntriesForJob, InventoryItem } from '../lib/db.ts';
+import { getTimeEntriesForJob, InventoryItem, EstimateRecord } from '../lib/db.ts';
 import { calculateCosts, CostSettings } from '../lib/processing.ts';
+import * as api from '../lib/api.ts';
 
 // Add declarations for jspdf and html2canvas
 declare var jspdf: any;
@@ -24,7 +25,7 @@ interface JobCostingProps {
   isInvoiceMode?: boolean;
   initialJobData?: EstimateRecord;
   onFinalizeInvoice?: (finalJobData: EstimateRecord, invoicePdfBlob: Blob) => void;
-  onEstimateCreated?: (newJob: EstimateRecord) => void;
+  onEstimateCreated?: (newJobData: Omit<EstimateRecord, 'id' | 'createdAt'>) => void;
   defaultCosts: CostSettings;
   inventoryItems: InventoryItem[];
 }
@@ -103,13 +104,8 @@ export default function JobCosting({
   defaultCosts,
   inventoryItems
 }: JobCostingProps) {
-  // Cost settings state, initialized with defaults from props
   const [costSettings, setCostSettings] = useState<CostSettings>(defaultCosts);
-
-  // Additional Line Items
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
-
-  // PDF Generation State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [generatedScope, setGeneratedScope] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -125,14 +121,7 @@ export default function JobCosting({
   const [generatedInvoiceNumber, setGeneratedInvoiceNumber] = useState('');
   const [isSavingSummary, setIsSavingSummary] = useState(false);
   const [summarySaveStatus, setSummarySaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [createdJob, setCreatedJob] = useState<EstimateRecord | null>(null);
   const [pdfOptions, setPdfOptions] = useState<PdfOptions>({ paperSize: 'letter', orientation: 'p' });
-  
-  // Email state
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  // Estimate Details - Initialized from props
   const [modalCustomerInfo, setModalCustomerInfo] = useState(calc.customer || { ...EMPTY_CUSTOMER, id: 0 });
 
   useEffect(() => {
@@ -152,13 +141,10 @@ export default function JobCosting({
             });
             setLineItems(costsData.lineItems || []);
         }
-
-        // Fetch actual tracked hours for the invoice
         if (initialJobData.id) {
             getTimeEntriesForJob(initialJobData.id).then(entries => {
                 const totalTrackedHours = entries.reduce((sum, entry) => sum + (entry.durationHours || 0), 0);
                 if (totalTrackedHours > 0) {
-                    // If tracked hours exist, use them. Otherwise, stick with the estimated hours.
                     setCostSettings(prev => ({ ...prev, laborHours: parseFloat(totalTrackedHours.toFixed(2)) }));
                 }
             });
@@ -168,7 +154,6 @@ export default function JobCosting({
     }
   }, [isInvoiceMode, initialJobData, defaultCosts]);
 
-  // Pre-generate a scope of work when the modal is opened for an estimate
   useEffect(() => {
     if (isModalOpen && !isInvoiceMode) {
         let scope = `**Scope of Work**\n\n`;
@@ -202,33 +187,24 @@ export default function JobCosting({
   };
 
   const handleSaveQuoteSummary = async () => {
-    if (!calc.customer?.id) {
-        alert("A customer must be selected to save a quote summary. Please go back to the calculator and select a customer.");
+    if (!calc.customer?.id || !onEstimateCreated) {
+        alert("A customer must be selected to save a quote summary.");
         return;
     }
-
     setIsSavingSummary(true);
     setSummarySaveStatus('idle');
-
     try {
         const summaryNumber = `SUMM-${new Date().getTime().toString().slice(-6)}`;
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-      
         const summaryElement = quoteSummaryPdfRef.current;
         if (!summaryElement) throw new Error("Quote Summary PDF template element not found.");
-      
         const summaryCanvas = await html2canvas(summaryElement, { scale: 2 });
         const summaryImgData = summaryCanvas.toDataURL('image/png');
         const summaryPdf = new jspdf.jsPDF({ orientation: 'p', unit: 'in', format: 'letter' });
-        const pdfWidth = summaryPdf.internal.pageSize.getWidth();
-        const pdfHeight = summaryPdf.internal.pageSize.getHeight();
-        summaryPdf.addImage(summaryImgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        summaryPdf.addImage(summaryImgData, 'PNG', 0, 0, summaryPdf.internal.pageSize.getWidth(), summaryPdf.internal.pageSize.getHeight());
         const summaryPdfBlob = summaryPdf.output('blob');
+        const placeholderBlob = new Blob(['N/A'], { type: 'text/plain' });
 
-        const placeholderBlob = new Blob(['This document is not applicable for a quote summary.'], { type: 'text/plain' });
-
-        await saveEstimate({
+        onEstimateCreated({
             customerId: calc.customer.id,
             estimatePdf: summaryPdfBlob,
             materialOrderPdf: placeholderBlob,
@@ -238,10 +214,8 @@ export default function JobCosting({
             scopeOfWork: 'N/A for Quote Summary',
             status: 'estimate',
         });
-
         setSummarySaveStatus('success');
         setTimeout(() => setSummarySaveStatus('idle'), 3000);
-
     } catch (e) {
         console.error(e);
         setSummarySaveStatus('error');
@@ -254,15 +228,13 @@ export default function JobCosting({
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    if (generationComplete && !isInvoiceMode && createdJob && onEstimateCreated) {
-        onEstimateCreated(createdJob);
+    if (generationComplete && !isInvoiceMode && onEstimateCreated) {
+        // The App component will handle navigation after the job is created
     }
     setTimeout(() => {
         setGenerationComplete(false);
         setGeneratedScope('');
         setError('');
-        setCreatedJob(null);
-        setEmailStatus('idle'); // Reset email status on close
     }, 300);
   };
   
@@ -275,41 +247,26 @@ export default function JobCosting({
 
   const handleGenerateInvoicePdf = async () => {
     if (!onFinalizeInvoice || !initialJobData) return;
-
     setIsGenerating(true);
     setError('');
     setGenerationComplete(false);
     setGenerationStatus('Generating Final Invoice PDF...');
-    
     const invoiceNumber = initialJobData.estimateNumber.replace('EST-', 'INV-');
     setGeneratedInvoiceNumber(invoiceNumber);
-    
     try {
-        await new Promise(resolve => setTimeout(resolve, 100)); // Render delay
-
+        await new Promise(resolve => setTimeout(resolve, 100));
         const invoiceElement = invoicePdfRef.current;
         if (!invoiceElement) throw new Error("Invoice PDF template element not found.");
-
         const canvas = await html2canvas(invoiceElement, { scale: 2 });
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jspdf.jsPDF({ 
-            orientation: pdfOptions.orientation, 
-            unit: 'in', 
-            format: pdfOptions.paperSize 
-        });
+        const pdf = new jspdf.jsPDF({ orientation: pdfOptions.orientation, unit: 'in', format: pdfOptions.paperSize });
         pdf.addImage(imgData, 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight());
-        
         const pdfBlob = pdf.output('blob');
         const url = URL.createObjectURL(pdfBlob);
         window.open(url, '_blank');
-
         setGenerationStatus('Finalizing...');
-        const updatedRecord: EstimateRecord = {
-            ...initialJobData,
-            costsData: costs, // Use the latest, potentially edited costs
-        };
+        const updatedRecord: EstimateRecord = { ...initialJobData, costsData: costs };
         onFinalizeInvoice(updatedRecord, pdfBlob);
-        
         setGenerationComplete(true);
     } catch(e) {
         console.error("Failed to generate invoice PDF", e);
@@ -322,25 +279,19 @@ export default function JobCosting({
 
 
   const handleGeneratePdf = async () => {
-    if (!modalCustomerInfo.id) {
+    if (!modalCustomerInfo.id || !onEstimateCreated) {
         setError("A customer must be selected to save an estimate.");
         return;
     }
-    
     setIsGenerating(true);
     setError('');
     setGenerationComplete(false);
-    
     try {
-        setGenerationStatus('Generating PDFs (1/2)...');
+        setGenerationStatus('Generating PDFs...');
         const estNumber = `EST-${new Date().getTime().toString().slice(-6)}`;
         setPdfEstimateNumber(estNumber);
-        const orderNumber = `ORD-${estNumber.slice(4)}`;
-        setPdfOrderNumber(orderNumber);
-        
-        await new Promise(resolve => setTimeout(resolve, 100)); // Render delay
-
-        // Generate Estimate PDF
+        setPdfOrderNumber(`ORD-${estNumber.slice(4)}`);
+        await new Promise(resolve => setTimeout(resolve, 100));
         const estimateElement = estimatePdfRef.current;
         if (!estimateElement) throw new Error("Estimate PDF template element not found.");
         const estCanvas = await html2canvas(estimateElement, { scale: 2 });
@@ -348,10 +299,6 @@ export default function JobCosting({
         const estPdf = new jspdf.jsPDF({ orientation: pdfOptions.orientation, unit: 'in', format: pdfOptions.paperSize });
         estPdf.addImage(estImgData, 'PNG', 0, 0, estPdf.internal.pageSize.getWidth(), estPdf.internal.pageSize.getHeight());
         const estPdfBlob = estPdf.output('blob');
-
-        setGenerationStatus('Generating PDFs (2/2)...');
-
-        // Generate Material Order PDF
         const materialElement = materialOrderPdfRef.current;
         if (!materialElement) throw new Error("Material Order PDF template element not found.");
         const matCanvas = await html2canvas(materialElement, { scale: 2 });
@@ -360,9 +307,8 @@ export default function JobCosting({
         matPdf.addImage(matImgData, 'PNG', 0, 0, matPdf.internal.pageSize.getWidth(), matPdf.internal.pageSize.getHeight());
         const matPdfBlob = matPdf.output('blob');
 
-        setGenerationStatus('Saving to database...');
-
-        const newJob = await saveEstimate({
+        setGenerationStatus('Saving...');
+        onEstimateCreated({
             customerId: modalCustomerInfo.id,
             estimatePdf: estPdfBlob,
             materialOrderPdf: matPdfBlob,
@@ -372,11 +318,8 @@ export default function JobCosting({
             scopeOfWork: generatedScope,
             status: 'estimate',
         });
-        setCreatedJob(newJob);
-        
         setGenerationComplete(true);
         setGenerationStatus('Complete!');
-
     } catch (e) {
         console.error("Failed to generate PDFs", e);
         setError(`Failed to generate PDFs. ${e instanceof Error ? e.message : 'An unknown error occurred.'}`);
@@ -393,14 +336,7 @@ export default function JobCosting({
   const CostInput = ({ label, name, value, onChange, type = 'number', smallText }: { label: string, name: keyof CostSettings, value: number, onChange: (field: keyof CostSettings, value: number) => void, type?: string, smallText?: string }) => (
     <label className="block">
         <span className={label}>{label}</span>
-        <input 
-            type={type} 
-            min={0} 
-            step={name.includes('Markup') || name.includes('Percentage') || name.includes('Tax') ? 1 : 0.01}
-            className={input} 
-            value={value} 
-            onChange={(e) => onChange(name, parseFloat(e.target.value) || 0)}
-        />
+        <input type={type} min={0} step={name.includes('Markup') || name.includes('Percentage') || name.includes('Tax') ? 1 : 0.01} className={input} value={value} onChange={(e) => onChange(name, parseFloat(e.target.value) || 0)} />
         {smallText && <span className="text-xs text-slate-500 dark:text-slate-400">{smallText}</span>}
     </label>
   );
@@ -501,20 +437,11 @@ export default function JobCosting({
           <p className="text-center text-sm text-amber-700 dark:text-amber-400 mt-2">Note: A customer must be selected on the calculator page to save an estimate.</p>
       )}
 
-      {/* Hidden container for PDF generation */}
       <div className="absolute -left-[9999px] top-auto">
-        <div ref={estimatePdfRef}>
-            <EstimatePDF calc={calc} costs={costs} companyInfo={companyInfo} customerInfo={modalCustomerInfo} scopeOfWork={generatedScope} estimateNumber={pdfEstimateNumber} pdfWidth={getPdfDimensions(pdfOptions).width} pdfHeight={getPdfDimensions(pdfOptions).height} />
-        </div>
-        <div ref={materialOrderPdfRef}>
-            <MaterialOrderPDF calc={calc} costs={costs} companyInfo={companyInfo} customerInfo={modalCustomerInfo} orderNumber={pdfOrderNumber} />
-        </div>
-        <div ref={quoteSummaryPdfRef}>
-            <QuoteSummaryPDF calc={calc} costs={costs} companyInfo={companyInfo} customerInfo={calc.customer || { ...EMPTY_CUSTOMER, id: 0}} />
-        </div>
-        <div ref={invoicePdfRef}>
-            <InvoicePDF calc={initialJobData?.calcData || calc} costs={costs} companyInfo={companyInfo} customerInfo={modalCustomerInfo} invoiceNumber={generatedInvoiceNumber} scopeOfWork={initialJobData?.scopeOfWork || ''} pdfWidth={getPdfDimensions(pdfOptions).width} pdfHeight={getPdfDimensions(pdfOptions).height} />
-        </div>
+        <div ref={estimatePdfRef}><EstimatePDF calc={calc} costs={costs} companyInfo={companyInfo} customerInfo={modalCustomerInfo} scopeOfWork={generatedScope} estimateNumber={pdfEstimateNumber} pdfWidth={getPdfDimensions(pdfOptions).width} pdfHeight={getPdfDimensions(pdfOptions).height} /></div>
+        <div ref={materialOrderPdfRef}><MaterialOrderPDF calc={calc} costs={costs} companyInfo={companyInfo} customerInfo={modalCustomerInfo} orderNumber={pdfOrderNumber} /></div>
+        <div ref={quoteSummaryPdfRef}><QuoteSummaryPDF calc={calc} costs={costs} companyInfo={companyInfo} customerInfo={calc.customer || { ...EMPTY_CUSTOMER, id: 0}} /></div>
+        <div ref={invoicePdfRef}><InvoicePDF calc={initialJobData?.calcData || calc} costs={costs} companyInfo={companyInfo} customerInfo={modalCustomerInfo} invoiceNumber={generatedInvoiceNumber} scopeOfWork={initialJobData?.scopeOfWork || ''} pdfWidth={getPdfDimensions(pdfOptions).width} pdfHeight={getPdfDimensions(pdfOptions).height} /></div>
       </div>
       
       {isModalOpen && (
@@ -527,7 +454,7 @@ export default function JobCosting({
                     <div className="text-center py-8">
                         <svg className="w-16 h-16 mx-auto text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <h3 className="mt-4 text-lg font-semibold">Success!</h3>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Documents have been generated and saved.</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Documents have been generated and will be added to the database.</p>
                         <button onClick={handleCloseModal} className="mt-6 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white shadow hover:bg-blue-700">Close</button>
                     </div>
                   ) : isGenerating ? (
@@ -539,19 +466,12 @@ export default function JobCosting({
                     <>
                     {!isInvoiceMode && (
                         <div className="mt-4 space-y-3">
-                            <div>
-                                <label className={label}>Scope of Work / Description</label>
-                                <textarea value={generatedScope} onChange={e => setGeneratedScope(e.target.value)} rows={8} className={`${input} text-sm`}></textarea>
-                            </div>
+                            <div><label className={label}>Scope of Work / Description</label><textarea value={generatedScope} onChange={e => setGeneratedScope(e.target.value)} rows={8} className={`${input} text-sm`}></textarea></div>
                             <div>
                                <span className={label}>PDF Options</span>
                                <div className="flex gap-2 mt-1">
-                                    <select value={pdfOptions.paperSize} onChange={e => setPdfOptions(p => ({...p, paperSize: e.target.value as 'letter' | 'a4'}))} className="rounded-md border-slate-300 dark:border-slate-500 text-sm">
-                                        <option value="letter">Letter</option><option value="a4">A4</option>
-                                    </select>
-                                    <select value={pdfOptions.orientation} onChange={e => setPdfOptions(p => ({...p, orientation: e.target.value as 'p' | 'l'}))} className="rounded-md border-slate-300 dark:border-slate-500 text-sm">
-                                        <option value="p">Portrait</option><option value="l">Landscape</option>
-                                    </select>
+                                    <select value={pdfOptions.paperSize} onChange={e => setPdfOptions(p => ({...p, paperSize: e.target.value as 'letter' | 'a4'}))} className="rounded-md border-slate-300 dark:border-slate-500 text-sm"><option value="letter">Letter</option><option value="a4">A4</option></select>
+                                    <select value={pdfOptions.orientation} onChange={e => setPdfOptions(p => ({...p, orientation: e.target.value as 'p' | 'l'}))} className="rounded-md border-slate-300 dark:border-slate-500 text-sm"><option value="p">Portrait</option><option value="l">Landscape</option></select>
                                </div>
                             </div>
                         </div>

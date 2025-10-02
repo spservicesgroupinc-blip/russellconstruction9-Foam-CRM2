@@ -1,3 +1,4 @@
+
 export interface Job {
     id: string;
     name: string;
@@ -54,7 +55,7 @@ export interface DriveFile {
 
 // --- Automation Types ---
 export type TriggerType = 'new_customer' | 'job_status_updated';
-export type ActionType = 'webhook' | 'create_task' | 'add_to_schedule';
+export type ActionType = 'webhook' | 'create_task' | 'add_to_schedule' | 'send_email' | 'update_inventory';
 
 export interface Automation {
     id?: number;
@@ -68,6 +69,8 @@ export interface Automation {
         url?: string; // for webhook
         task_title?: string;
         task_description?: string;
+        email_subject?: string; // for send_email
+        email_body?: string;    // for send_email
     };
     is_enabled: boolean;
 }

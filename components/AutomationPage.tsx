@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Automation } from './types.ts';
 import AutomationEditor from './AutomationEditor.tsx';
@@ -28,6 +29,10 @@ const getActionDescription = (automation: Automation): string => {
             return `Create a task: "${automation.action_config.task_title}"`;
         case 'add_to_schedule':
             return 'Add job to the schedule';
+        case 'send_email':
+            return `Send an email with subject: "${automation.action_config.email_subject}"`;
+        case 'update_inventory':
+            return `Deduct foam sets from inventory`;
         default:
             return 'Unknown Action';
     }

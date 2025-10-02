@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import SprayFoamCalculator, { CalculationResults, CalculatorInputs, InventoryLineItem } from './components/SprayFoamCalculator.tsx';
 import JobCosting from './components/JobCosting.tsx';
@@ -20,17 +18,17 @@ import TeamPage from './components/TeamPage.tsx';
 import MorePage from './components/MorePage.tsx';
 import TimeClockPage from './components/TimeClockPage.tsx';
 import InventoryPage from './components/InventoryPage.tsx';
-// FIX: Import the missing EmployeeDashboard component.
 import EmployeeDashboard from './components/EmployeeDashboard.tsx';
 import LoginScreen from './components/LoginScreen.tsx';
 import { CompanyInfo, CustomerInfo } from './components/EstimatePDF.tsx';
-import { db, EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
+import { EstimateRecord, JobStatus, InventoryItem } from './lib/db.ts';
 import { CostSettings, DEFAULT_COST_SETTINGS } from './lib/processing.ts';
 import { Job, Employee, Task, Automation } from './components/types.ts';
 import Logo from './components/Logo.tsx';
 import CloudSync from './components/CloudSync.tsx';
 import AutomationPage from './components/AutomationPage.tsx';
 import { processAutomations } from './lib/automations.ts';
+import * as api from './lib/api.ts'; // Import the new API service layer
 
 export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard' | 'automations';
 
@@ -111,6 +109,8 @@ const App: React.FC = () => {
   const [filter, setFilter] = useState<JobStatus | 'all'>('all');
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER_FORM);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Material Order State
   const [soldJobData, setSoldJobData] = useState<EstimateRecord | null>(null);
@@ -149,58 +149,123 @@ const App: React.FC = () => {
     return newJob;
   };
 
-    // Task Handlers
-    const handleAddTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => {
-        const newTask: Omit<Task, 'id'> = {
-            ...task,
-            completed: false,
-            createdAt: new Date().toISOString(),
-        };
-        const newId = await db.tasks.add(newTask as Task);
-        const addedTask = { ...newTask, id: newId };
-        setTasks(prev => [addedTask, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-        return addedTask;
-    };
+  const handleAddTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => {
+      const addedTask = await api.addTask(task);
+      setTasks(prev => [addedTask, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      return addedTask;
+  };
+  
+  const handleAddInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
+    const newItem = await api.addInventoryItem(item);
+    setInventoryItems(prev => [...prev, newItem].sort((a,b) => a.name.localeCompare(b.name)));
+  };
 
-    const automationActionHandlers = {
-        createTask: handleAddTask,
-        addToSchedule: addCalendarJob,
-    };
+  const handleUpdateInventoryItem = async (item: InventoryItem) => {
+    await api.updateInventoryItem(item);
+    setInventoryItems(prev => prev.map(i => i.id === item.id ? item : i));
+  };
+
+  const handleDeleteInventoryItem = async (itemId: number) => {
+    await api.deleteInventoryItem(itemId);
+    setInventoryItems(prev => prev.filter(i => i.id !== itemId));
+  };
+    
+  // --- Automation Action Handlers ---
+  const handleSendEmail = async (to: string, subject: string, body: string) => {
+    // In a real app, this would call a backend service.
+    // For now, we'll log it to the console for demonstration.
+    console.log("---- SENDING EMAIL (SIMULATED) ----");
+    console.log("To:", to);
+    console.log("Subject:", subject);
+    console.log("Body:", body);
+    console.log("-----------------------------------");
+  };
+
+  const handleDeductInventoryForJob = async (job: EstimateRecord) => {
+      const { ocSets, ccSets } = job.calcData;
+      if (ocSets > 0) {
+          const ocItem = inventoryItems.find(i => i.name.toLowerCase().includes('open-cell set'));
+          if (ocItem) {
+              const newQuantity = Math.max(0, ocItem.quantity - ocSets);
+              await handleUpdateInventoryItem({ ...ocItem, quantity: newQuantity });
+              console.log(`Automation: Deducted ${ocSets.toFixed(2)} OC sets. New quantity: ${newQuantity}`);
+          } else {
+              console.warn("Automation: Could not find 'Open-Cell Set' in inventory to deduct quantity.");
+          }
+      }
+      if (ccSets > 0) {
+          const ccItem = inventoryItems.find(i => i.name.toLowerCase().includes('closed-cell set'));
+          if (ccItem) {
+              const newQuantity = Math.max(0, ccItem.quantity - ccSets);
+              await handleUpdateInventoryItem({ ...ccItem, quantity: newQuantity });
+              console.log(`Automation: Deducted ${ccSets.toFixed(2)} CC sets. New quantity: ${newQuantity}`);
+          } else {
+              console.warn("Automation: Could not find 'Closed-Cell Set' in inventory to deduct quantity.");
+          }
+      }
+  };
+
+  const automationActionHandlers = {
+      createTask: handleAddTask,
+      addToSchedule: addCalendarJob,
+      sendEmail: handleSendEmail,
+      deductInventoryForJob: handleDeductInventoryForJob,
+  };
 
   const loadData = useCallback(async () => {
-    const savedInfo = localStorage.getItem('companyInfo');
-    const savedSettings = localStorage.getItem('appSettings');
+    setIsLoading(true);
+    setError(null);
+    try {
+        const savedInfo = localStorage.getItem('companyInfo');
+        const savedSettings = localStorage.getItem('appSettings');
 
-    if (savedInfo && savedSettings) {
-      const parsedInfo = JSON.parse(savedInfo);
-      const parsedSettings = JSON.parse(savedSettings);
-      setCompanyInfo(parsedInfo);
-      setAppSettings(parsedSettings);
-      // Apply defaults to calculator
-      setCalculatorInputs(prev => ({
-        ...prev,
-        openCellYield: parsedSettings.defaultYields.openCellYield,
-        closedCellYield: parsedSettings.defaultYields.closedCellYield,
-      }));
-    } else {
-      setCompanyInfo(DEFAULT_COMPANY_INFO);
-      setAppSettings(DEFAULT_APP_SETTINGS);
-      localStorage.setItem('companyInfo', JSON.stringify(DEFAULT_COMPANY_INFO));
-      localStorage.setItem('appSettings', JSON.stringify(DEFAULT_APP_SETTINGS));
+        if (savedInfo && savedSettings) {
+            const parsedInfo = JSON.parse(savedInfo);
+            const parsedSettings = JSON.parse(savedSettings);
+            setCompanyInfo(parsedInfo);
+            setAppSettings(parsedSettings);
+            setCalculatorInputs(prev => ({
+                ...prev,
+                openCellYield: parsedSettings.defaultYields.openCellYield,
+                closedCellYield: parsedSettings.defaultYields.closedCellYield,
+            }));
+        } else {
+            setCompanyInfo(DEFAULT_COMPANY_INFO);
+            setAppSettings(DEFAULT_APP_SETTINGS);
+            localStorage.setItem('companyInfo', JSON.stringify(DEFAULT_COMPANY_INFO));
+            localStorage.setItem('appSettings', JSON.stringify(DEFAULT_APP_SETTINGS));
+        }
+        
+        // Fetch all data in parallel using the new API service
+        const [
+            allCustomers,
+            allJobs,
+            allEmployees,
+            allItems,
+            allTasks,
+            allAutomations,
+        ] = await Promise.all([
+            api.getCustomers(),
+            api.getJobs(),
+            api.getEmployees(),
+            api.getInventoryItems(),
+            api.getTasks(),
+            api.getAutomations(),
+        ]);
+        
+        setCustomers(allCustomers);
+        setJobs(allJobs);
+        setEmployees(allEmployees);
+        setInventoryItems(allItems);
+        setTasks(allTasks);
+        setAutomations(allAutomations);
+
+    } catch (err) {
+        console.error("Failed to load data:", err);
+        setError("Failed to load application data. Please try again later.");
+    } finally {
+        setIsLoading(false);
     }
-    
-    const allCustomers = await db.customers.toArray();
-    setCustomers(allCustomers);
-    const allJobs = await db.estimates.orderBy('createdAt').reverse().toArray();
-    setJobs(allJobs);
-    const allEmployees = await db.employees.toArray();
-    setEmployees(allEmployees);
-    const allItems = await db.inventory.toArray();
-    setInventoryItems(allItems);
-    const allTasks = await db.tasks.orderBy('createdAt').reverse().toArray();
-    setTasks(allTasks);
-    const allAutomations = await db.automations.toArray();
-    setAutomations(allAutomations);
   }, []);
 
 
@@ -231,13 +296,9 @@ const App: React.FC = () => {
   };
 
   const handleAddCustomer = async (customer: Omit<CustomerInfo, 'id'>) => {
-    const newId = await db.customers.add(customer as CustomerInfo);
-    const newCustomerWithId = { ...customer, id: newId };
+    const newCustomerWithId = await api.addCustomer(customer);
     setCustomers(prev => [...prev, newCustomerWithId]);
-    
-    // Process automations
     processAutomations('new_customer', newCustomerWithId, automations, automationActionHandlers);
-    
     return newCustomerWithId;
   };
 
@@ -258,24 +319,24 @@ const App: React.FC = () => {
   };
   
   const handleAddEmployee = async (employee: Omit<Employee, 'id'>) => {
-    const newId = await db.employees.add(employee as Employee);
-    const newEmployee = { ...employee, id: newId! };
+    const newEmployee = await api.addEmployee(employee);
     setEmployees(prev => [...prev, newEmployee]);
     return newEmployee;
   };
 
   const handleUpdateCustomer = async (customer: CustomerInfo) => {
-      await db.customers.put(customer);
+      await api.updateCustomer(customer);
       setCustomers(prev => prev.map(c => c.id === customer.id ? customer : c));
   }
 
   const handleProceedToCosting = (results: CalculationResults) => {
     setCalculationResults(results);
-    setCurrentJob(null); // Ensure we are in estimate mode, not invoice mode
+    setCurrentJob(null);
     setPage('costing');
   };
 
-  const handleEstimateCreated = (newJob: EstimateRecord) => {
+  const handleEstimateCreated = async (newJobData: Omit<EstimateRecord, 'id' | 'createdAt'>) => {
+      const newJob = await api.addJob(newJobData);
       setJobs(prev => [newJob, ...prev]);
       setCurrentJob(newJob);
       setPage('jobDetail');
@@ -293,7 +354,7 @@ const App: React.FC = () => {
   
   const handleDeleteJob = async (jobId: number) => {
       if (window.confirm("Are you sure you want to permanently delete this job record?")) {
-        await db.estimates.delete(jobId);
+        await api.deleteJob(jobId);
         setJobs(prev => prev.filter(j => j.id !== jobId));
       }
   }
@@ -302,17 +363,14 @@ const App: React.FC = () => {
       const originalJob = jobs.find(j => j.id === jobId);
       if (!originalJob) return;
 
-      await db.estimates.update(jobId, updates);
+      const updatedJob = await api.updateJob(jobId, updates);
       
-      const updatedJob = { ...originalJob, ...updates };
-
       setJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
 
       if (currentJob?.id === jobId) {
           setCurrentJob(updatedJob);
       }
 
-      // Process automations if status changed
       if (updates.status && updates.status !== originalJob.status) {
           const jobWithCustomer = {
               ...updatedJob,
@@ -343,22 +401,6 @@ const App: React.FC = () => {
       setJobToSchedule(job);
       setPage('schedule');
   }
-
-  const handleAddInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
-    const newId = await db.inventory.add(item as InventoryItem);
-    const newItem = { ...item, id: newId };
-    setInventoryItems(prev => [...prev, newItem].sort((a,b) => a.name.localeCompare(b.name)));
-  };
-
-  const handleUpdateInventoryItem = async (item: InventoryItem) => {
-    await db.inventory.put(item);
-    setInventoryItems(prev => prev.map(i => i.id === item.id ? item : i));
-  };
-
-  const handleDeleteInventoryItem = async (itemId: number) => {
-    await db.inventory.delete(itemId);
-    setInventoryItems(prev => prev.filter(i => i.id !== itemId));
-  };
 
   const resetCurrentJob = () => {
     setCurrentJob(null);
@@ -395,46 +437,43 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setCurrentUser(null);
-    setPage('dashboard'); // Reset to default
+    setPage('dashboard');
   };
 
-  // Automation Handlers
   const handleAddAutomation = async (automation: Omit<Automation, 'id'>) => {
-      const newId = await db.automations.add(automation as Automation);
-      const newAutomation = { ...automation, id: newId };
+      const newAutomation = await api.addAutomation(automation);
       setAutomations(prev => [...prev, newAutomation]);
   };
 
   const handleUpdateAutomation = async (automation: Automation) => {
-      await db.automations.put(automation);
+      await api.updateAutomation(automation);
       setAutomations(prev => prev.map(a => a.id === automation.id ? automation : a));
   };
 
   const handleDeleteAutomation = async (automationId: number) => {
-      await db.automations.delete(automationId);
+      await api.deleteAutomation(automationId);
       setAutomations(prev => prev.filter(a => a.id !== automationId));
   };
 
-
     const handleUpdateTask = async (task: Task) => {
-        await db.tasks.put(task);
+        await api.updateTask(task);
         setTasks(prev => prev.map(t => t.id === task.id ? task : t));
     };
 
     const handleDeleteTask = async (taskId: number) => {
-        await db.tasks.delete(taskId);
+        await api.deleteTask(taskId);
         setTasks(prev => prev.filter(t => t.id !== taskId));
     };
 
     const handleToggleTaskCompletion = async (taskId: number) => {
         const task = tasks.find(t => t.id === taskId);
         if (task) {
-            const updatedTask = {
+            const updatedTaskData = {
                 ...task,
                 completed: !task.completed,
                 completedAt: !task.completed ? new Date().toISOString() : undefined
             };
-            await handleUpdateTask(updatedTask);
+            await handleUpdateTask(updatedTaskData);
         }
     };
 
@@ -443,74 +482,72 @@ const App: React.FC = () => {
       if (['employeeDashboard'].includes(currentPage)) return 'employeeDashboard';
       if (['schedule'].includes(currentPage)) return 'schedule';
       if (['timeclock'].includes(currentPage)) return 'timeclock';
-      return 'employeeDashboard'; // fallback for employee
+      return 'employeeDashboard';
     }
-
-    // Admin Tabs
     if (['dashboard'].includes(currentPage)) return 'dashboard';
     if (['customers', 'customerDetail'].includes(currentPage)) return 'customers';
-    if (['calculator', 'costing', 'jobDetail', 'invoicing'].includes(currentPage)) return 'calculator'; // Grouping for active state
+    if (['calculator', 'costing', 'jobDetail', 'invoicing'].includes(currentPage)) return 'calculator';
     if (['schedule', 'gantt'].includes(currentPage)) return 'schedule';
     if (['more', 'jobsList', 'team', 'settings', 'materialOrder', 'inventory', 'timeclock', 'map', 'automations'].includes(currentPage)) return 'more';
-    return 'dashboard'; // fallback
+    return 'dashboard';
   }
   const activeTab = getActiveTab(page);
-
-  const MobileNavButton: React.FC<{
-    target: Page;
-    label: string;
-    icon: React.ReactElement;
-  }> = ({ target, label, icon }) => (
-    <button
-      onClick={() => setPage(target)}
-      className={`w-full flex flex-col items-center justify-center p-2 rounded-lg transition-colors text-xs font-semibold ${
-        activeTab === target
-          ? 'bg-blue-600 text-white'
-          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-      }`}
-    >
+  
+  const MobileNavButton: React.FC<{ target: Page; label: string; icon: React.ReactElement; }> = ({ target, label, icon }) => (
+    <button onClick={() => setPage(target)} className={`w-full flex flex-col items-center justify-center p-2 rounded-lg transition-colors text-xs font-semibold ${ activeTab === target ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600' }`} >
       {icon}
       <span>{label}</span>
     </button>
   );
 
-  const SidebarNavButton: React.FC<{
-    target: Page;
-    label: string;
-    icon: React.ReactElement;
-    active: boolean;
-  }> = ({ target, label, icon, active }) => (
-    <button
-      onClick={() => setPage(target)}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-semibold ${
-        active
-          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-      }`}
-    >
-      {/* FIX: Cast the icon to allow adding a className prop, resolving a TypeScript error. */}
+  const SidebarNavButton: React.FC<{ target: Page; label: string; icon: React.ReactElement; active: boolean; }> = ({ target, label, icon, active }) => (
+    <button onClick={() => setPage(target)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm font-semibold ${ active ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' }`} >
       {React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5 flex-shrink-0"})}
       <span>{label}</span>
     </button>
   );
+  
+  const LoadingScreen: React.FC = () => (
+      <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+              <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p className="mt-4 text-sm font-medium text-slate-500 dark:text-slate-400">Loading Application Data...</p>
+          </div>
+      </div>
+  );
+
+  const ErrorScreen: React.FC<{ message: string }> = ({ message }) => (
+      <div className="flex items-center justify-center h-full p-4">
+          <div className="text-center p-6 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
+              <h2 className="text-lg font-bold text-red-700 dark:text-red-300">An Error Occurred</h2>
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{message}</p>
+              <button onClick={loadData} className="mt-4 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-md hover:bg-red-700">
+                  Try Again
+              </button>
+          </div>
+      </div>
+  );
 
   const renderPage = () => {
+    if (isLoading) return <LoadingScreen />;
+    if (error) return <ErrorScreen message={error} />;
+
     if (currentUser?.role === 'employee') {
-// FIX: The switch statement for employee role was incomplete. It was missing cases and a default, causing the component to sometimes return 'void'.
-// This has been corrected by completing the 'schedule' case, adding 'timeclock', and providing a default case.
       switch (page) {
         case 'employeeDashboard': return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} tasks={tasks} onToggleTaskCompletion={handleToggleTaskCompletion} />;
-        case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
+        case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} onNavigate={setPage} />;
         case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} currentUser={currentUser.data} />;
         default: return <EmployeeDashboard user={currentUser.data} jobs={calendarJobs} employees={employees} onNavigate={setPage} tasks={tasks} onToggleTaskCompletion={handleToggleTaskCompletion} />;
       }
     }
 
-    if (!currentUser) { // Public/Login
+    if (!currentUser) {
       return <LoginScreen onLogin={handleLogin} />;
     }
 
-    // Admin Pages
     switch (page) {
       case 'dashboard': return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(status) => { setFilter(status); setPage('jobsList'); }} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
       case 'calculator': return <SprayFoamCalculator onProceedToCosting={handleProceedToCosting} customers={customers} setIsAddCustomerModalOpen={setIsAddCustomerModalOpen} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId} calculatorInputs={calculatorInputs} setCalculatorInputs={setCalculatorInputs} defaultYields={appSettings.defaultYields} inventoryItems={inventoryItems} defaultCalculatorInputs={DEFAULT_CALCULATOR_INPUTS} />;
@@ -521,9 +558,8 @@ const App: React.FC = () => {
       case 'jobDetail': return currentJob ? <JobDetail job={currentJob} customers={customers} employees={employees} onBack={() => setPage('jobsList')} onUpdateJob={handleUpdateJob} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('invoicing')}} onScheduleJob={handleScheduleJob} onViewCustomer={handleViewCustomer} /> : <div className="p-4">No job selected.</div>;
       case 'materialOrder': return <MaterialOrder soldJobData={soldJobData} onHandInventory={onHandInventory} setOnHandInventory={setOnHandInventory} />;
       case 'invoicing': return currentJob ? <JobCosting calculationResults={currentJob.calcData} onBack={() => setPage('jobDetail')} companyInfo={companyInfo!} isInvoiceMode initialJobData={currentJob} onFinalizeInvoice={handleFinalizeInvoice} defaultCosts={appSettings.defaultCosts} inventoryItems={inventoryItems} /> : <Invoicing soldJobs={jobs.filter(j => j.status === 'sold' || j.status === 'invoiced')} customers={customers} companyInfo={companyInfo!} onPrepareInvoice={(job) => { setCurrentJob(job); setPage('invoicing'); }} />;
-// FIX: Completed the JobCalendar component call with all required props.
-      case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} />;
-      case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} />;
+      case 'schedule': return <JobCalendar jobToSchedule={jobToSchedule} onJobScheduled={() => setJobToSchedule(null)} jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} currentUser={currentUser} onNavigate={setPage} />;
+      case 'gantt': return <GanttPage jobs={calendarJobs} setJobs={setCalendarJobs} employees={employees} onNavigate={setPage} />;
       case 'map': return <MapView customers={customers} onUpdateCustomer={handleUpdateCustomer} />;
       case 'settings': return <Settings onSave={handleSaveSettings} currentInfo={companyInfo} appSettings={appSettings} />;
       case 'team': return <TeamPage employees={employees} onAddEmployee={handleAddEmployee} jobs={jobs} />;
@@ -538,7 +574,6 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 font-sans">
         
-        {/* DESKTOP SIDEBAR */}
         {currentUser && (
             <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700">
                 <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-center h-24 items-center">
@@ -573,7 +608,6 @@ const App: React.FC = () => {
                  <div className="p-4 mt-auto border-t border-slate-200 dark:border-slate-700">
                     <p className="text-sm font-semibold truncate">{currentUser.role === 'admin' ? 'Admin' : currentUser.data.name}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{currentUser.role === 'admin' ? 'Administrator' : currentUser.data.role}</p>
-                    {/* FIX: Use the correct handler function `handleLogout` for the onClick event. */}
                     <button onClick={handleLogout} className="text-sm font-medium text-red-500 hover:underline mt-2">Logout</button>
                 </div>
             </aside>
@@ -610,7 +644,6 @@ const App: React.FC = () => {
                     jobs={jobs}
                     handleUpdateJob={handleUpdateJob}
                 />
-                {/* MOBILE BOTTOM NAV */}
                 <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[100] bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 p-2 shadow-t-lg">
                     <div className="mx-auto max-w-md grid grid-cols-5 gap-2">
                         {currentUser.role === 'admin' ? (
@@ -658,5 +691,4 @@ const App: React.FC = () => {
     </div>
   );
 };
-// FIX: Add default export to make the component available for import in index.tsx.
 export default App;
