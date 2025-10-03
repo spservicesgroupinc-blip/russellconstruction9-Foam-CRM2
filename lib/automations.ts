@@ -1,10 +1,9 @@
 
-import { Automation, Task, Job } from '../components/types.ts';
+import { Automation, AutomationAction, Task, Job } from '../components/types.ts';
 import { EstimateRecord } from './db.ts';
 import { CustomerInfo } from '../components/PDF.tsx';
 import { fmtInput } from '../components/utils.ts';
 
-// Type for the action handler functions passed from App.tsx
 interface ActionHandlers {
     createTask: (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>) => Promise<Task>;
     addToSchedule: (job: Omit<Job, 'id'>) => Job;
@@ -12,7 +11,6 @@ interface ActionHandlers {
     deductInventoryForJob: (job: EstimateRecord) => Promise<void>;
 }
 
-// Function to replace placeholders like [customer_name] in strings
 const replacePlaceholders = (text: string, data: any): string => {
     if (!text) return '';
     let result = text;
@@ -35,7 +33,6 @@ export const processAutomations = (
     for (const automation of automationsToRun) {
         let shouldRun = false;
 
-        // Check conditions
         if (triggerType === 'new_customer') {
             shouldRun = true;
         } else if (triggerType === 'job_status_updated') {
@@ -47,39 +44,55 @@ export const processAutomations = (
 
         if (shouldRun) {
             console.log(`Running automation: ${automation.name}`);
-            executeAction(automation, data, handlers);
+            executeAutomation(automation, data, handlers);
         }
     }
 };
 
-const executeAction = async (automation: Automation, data: CustomerInfo | EstimateRecord, handlers: ActionHandlers) => {
-    switch (automation.action_type) {
+const executeAutomation = async (automation: Automation, data: CustomerInfo | EstimateRecord, handlers: ActionHandlers) => {
+    const actions = automation.actions && automation.actions.length > 0
+        ? automation.actions.sort((a, b) => a.order - b.order)
+        : automation.action_type
+            ? [{ action_type: automation.action_type, action_config: automation.action_config || {}, order: 0 }]
+            : [];
+
+    for (const action of actions) {
+        try {
+            await executeAction(action, data, handlers);
+        } catch (error) {
+            console.error(`Action "${action.action_type}" in automation "${automation.name}" failed:`, error);
+        }
+    }
+};
+
+const executeAction = async (action: AutomationAction | { action_type: string; action_config: any; order: number }, data: CustomerInfo | EstimateRecord, handlers: ActionHandlers) => {
+    switch (action.action_type) {
         case 'webhook':
-            if (automation.action_config.url) {
+            if (action.action_config.url) {
                 try {
-                    await fetch(automation.action_config.url, {
+                    await fetch(action.action_config.url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data),
                     });
                 } catch (error) {
-                    console.error(`Webhook for automation "${automation.name}" failed:`, error);
+                    console.error(`Webhook action failed:`, error);
                 }
             }
             break;
 
         case 'create_task':
-            if (automation.action_config.task_title) {
-                const title = replacePlaceholders(automation.action_config.task_title, data);
-                const description = replacePlaceholders(automation.action_config.task_description || '', data);
+            if (action.action_config.task_title) {
+                const title = replacePlaceholders(action.action_config.task_title, data);
+                const description = replacePlaceholders(action.action_config.task_description || '', data);
                 await handlers.createTask({
                     title,
                     description,
-                    assignedTo: [], // Default to admin/unassigned
+                    assignedTo: [],
                 });
             }
             break;
-        
+
         case 'add_to_schedule':
             const jobData = data as EstimateRecord;
             if (jobData && jobData.calcData?.customer) {
@@ -93,23 +106,23 @@ const executeAction = async (automation: Automation, data: CustomerInfo | Estima
                 });
             }
             break;
-        
+
         case 'send_email':
             const customerEmail = (data as any).calcData?.customer?.email || (data as CustomerInfo).email;
-            if (customerEmail && automation.action_config.email_subject) {
-                const subject = replacePlaceholders(automation.action_config.email_subject, data);
-                const body = replacePlaceholders(automation.action_config.email_body || '', data);
+            if (customerEmail && action.action_config.email_subject) {
+                const subject = replacePlaceholders(action.action_config.email_subject, data);
+                const body = replacePlaceholders(action.action_config.email_body || '', data);
                 await handlers.sendEmail(customerEmail, subject, body);
             } else {
-                console.warn(`Automation "${automation.name}" skipped: No customer email found.`);
+                console.warn(`Send email action skipped: No customer email found.`);
             }
             break;
 
         case 'update_inventory':
-            if ('estimateNumber' in data) { // Check if data is an EstimateRecord
+            if ('estimateNumber' in data) {
                 await handlers.deductInventoryForJob(data as EstimateRecord);
             } else {
-                console.warn(`Automation "${automation.name}" skipped: 'update_inventory' action can only be triggered by job-related events.`);
+                console.warn(`Update inventory action skipped: Can only be triggered by job-related events.`);
             }
             break;
     }

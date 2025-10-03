@@ -57,13 +57,9 @@ export interface DriveFile {
 export type TriggerType = 'new_customer' | 'job_status_updated';
 export type ActionType = 'webhook' | 'create_task' | 'add_to_schedule' | 'send_email' | 'update_inventory';
 
-export interface Automation {
+export interface AutomationAction {
     id?: number;
-    name: string;
-    trigger_type: TriggerType;
-    trigger_config: {
-        to_status?: string; // e.g., 'sold'
-    };
+    automation_id?: number;
     action_type: ActionType;
     action_config: {
         url?: string; // for webhook
@@ -72,5 +68,25 @@ export interface Automation {
         email_subject?: string; // for send_email
         email_body?: string;    // for send_email
     };
+    order: number;
+}
+
+export interface Automation {
+    id?: number;
+    name: string;
+    trigger_type: TriggerType;
+    trigger_config: {
+        to_status?: string; // e.g., 'sold'
+    };
+    actions: AutomationAction[];
     is_enabled: boolean;
+    // Legacy fields for backward compatibility
+    action_type?: ActionType;
+    action_config?: {
+        url?: string;
+        task_title?: string;
+        task_description?: string;
+        email_subject?: string;
+        email_body?: string;
+    };
 }

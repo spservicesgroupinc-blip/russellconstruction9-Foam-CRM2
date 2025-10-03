@@ -21,21 +21,29 @@ const getTriggerDescription = (automation: Automation): string => {
     }
 };
 
-const getActionDescription = (automation: Automation): string => {
-    switch (automation.action_type) {
-        case 'webhook':
-            return `Trigger a webhook`;
-        case 'create_task':
-            return `Create a task: "${automation.action_config.task_title}"`;
-        case 'add_to_schedule':
-            return 'Add job to the schedule';
-        case 'send_email':
-            return `Send an email with subject: "${automation.action_config.email_subject}"`;
-        case 'update_inventory':
-            return `Deduct foam sets from inventory`;
-        default:
-            return 'Unknown Action';
-    }
+const getActionDescription = (automation: Automation): string[] => {
+    const actions = automation.actions && automation.actions.length > 0
+        ? automation.actions.sort((a, b) => a.order - b.order)
+        : automation.action_type
+            ? [{ action_type: automation.action_type, action_config: automation.action_config || {}, order: 0 }]
+            : [];
+
+    return actions.map(action => {
+        switch (action.action_type) {
+            case 'webhook':
+                return `Trigger a webhook`;
+            case 'create_task':
+                return `Create a task: "${action.action_config.task_title}"`;
+            case 'add_to_schedule':
+                return 'Add job to the schedule';
+            case 'send_email':
+                return `Send an email with subject: "${action.action_config.email_subject}"`;
+            case 'update_inventory':
+                return `Deduct foam sets from inventory`;
+            default:
+                return 'Unknown Action';
+        }
+    });
 };
 
 const AutomationPage: React.FC<AutomationPageProps> = ({ automations, onAddAutomation, onUpdateAutomation, onDeleteAutomation }) => {
@@ -59,7 +67,7 @@ const AutomationPage: React.FC<AutomationPageProps> = ({ automations, onAddAutom
     const handleToggle = (automation: Automation) => {
         onUpdateAutomation({ ...automation, is_enabled: !automation.is_enabled });
     };
-    
+
     const card = "rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 shadow-sm";
 
     return (
@@ -76,7 +84,7 @@ const AutomationPage: React.FC<AutomationPageProps> = ({ automations, onAddAutom
                         + Create Automation
                     </button>
                 </div>
-                
+
                 <div className={`${card} p-4`}>
                     <div className="space-y-3">
                         {automations.length === 0 ? (
@@ -84,39 +92,53 @@ const AutomationPage: React.FC<AutomationPageProps> = ({ automations, onAddAutom
                                 No automations created yet. Get started by creating one!
                             </p>
                         ) : (
-                            automations.map(auto => (
-                                <div key={auto.id} className="p-3 rounded-lg border bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 flex items-center justify-between gap-3">
-                                    <label className="flex items-center cursor-pointer">
-                                        <div className="relative">
-                                            <input type="checkbox" className="sr-only" checked={auto.is_enabled} onChange={() => handleToggle(auto)} />
-                                            <div className={`block w-10 h-6 rounded-full transition ${auto.is_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-500'}`}></div>
-                                            <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${auto.is_enabled ? 'translate-x-4' : ''}`}></div>
+                            automations.map(auto => {
+                                const actionDescriptions = getActionDescription(auto);
+                                return (
+                                    <div key={auto.id} className="p-3 rounded-lg border bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 flex items-center justify-between gap-3">
+                                        <label className="flex items-center cursor-pointer">
+                                            <div className="relative">
+                                                <input type="checkbox" className="sr-only" checked={auto.is_enabled} onChange={() => handleToggle(auto)} />
+                                                <div className={`block w-10 h-6 rounded-full transition ${auto.is_enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-500'}`}></div>
+                                                <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform ${auto.is_enabled ? 'translate-x-4' : ''}`}></div>
+                                            </div>
+                                        </label>
+                                        <div className="flex-grow mx-4">
+                                            <p className={`font-semibold text-slate-800 dark:text-slate-100 ${!auto.is_enabled ? 'line-through text-slate-400 dark:text-slate-500' : ''}`}>{auto.name}</p>
+                                            <p className={`text-xs text-slate-500 dark:text-slate-400 ${!auto.is_enabled ? 'line-through' : ''}`}>
+                                                <span className="font-medium">When:</span> {getTriggerDescription(auto)}
+                                            </p>
+                                            <div className={`text-xs text-slate-500 dark:text-slate-400 ${!auto.is_enabled ? 'line-through' : ''}`}>
+                                                <span className="font-medium">Then:</span>
+                                                {actionDescriptions.length === 0 ? (
+                                                    <span className="ml-1">No actions configured</span>
+                                                ) : actionDescriptions.length === 1 ? (
+                                                    <span className="ml-1">{actionDescriptions[0]}</span>
+                                                ) : (
+                                                    <ol className="ml-4 mt-1 list-decimal">
+                                                        {actionDescriptions.map((desc, idx) => (
+                                                            <li key={idx}>{desc}</li>
+                                                        ))}
+                                                    </ol>
+                                                )}
+                                            </div>
                                         </div>
-                                    </label>
-                                    <div className="flex-grow mx-4">
-                                        <p className={`font-semibold text-slate-800 dark:text-slate-100 ${!auto.is_enabled ? 'line-through text-slate-400 dark:text-slate-500' : ''}`}>{auto.name}</p>
-                                        <p className={`text-xs text-slate-500 dark:text-slate-400 ${!auto.is_enabled ? 'line-through' : ''}`}>
-                                            <span className="font-medium">When:</span> {getTriggerDescription(auto)}
-                                        </p>
-                                        <p className={`text-xs text-slate-500 dark:text-slate-400 ${!auto.is_enabled ? 'line-through' : ''}`}>
-                                            <span className="font-medium">Then:</span> {getActionDescription(auto)}
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => handleOpenEditor(auto)} className="p-2 rounded-full text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-600">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                            </button>
+                                            <button onClick={() => onDeleteAutomation(auto.id!)} className="p-2 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => handleOpenEditor(auto)} className="p-2 rounded-full text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-600">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                                        </button>
-                                        <button onClick={() => onDeleteAutomation(auto.id!)} className="p-2 rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40">
-                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>
             </div>
-            
+
             {isEditorOpen && (
                 <AutomationEditor
                     existingAutomation={editingAutomation}
