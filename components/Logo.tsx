@@ -3,29 +3,33 @@ import React from 'react';
 const Logo: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center my-4 py-4">
-        <svg width="250" height="60" viewBox="0 0 250 60" className="drop-shadow-sm">
-            {/* <!-- Icon: Spray Gun --> */}
-            <g transform="translate(5, 5) scale(0.9)">
-                {/* <!-- Gun Body (black) --> */}
-                <path d="M 0 15 L 20 15 L 20 5 L 45 5 L 45 25 L 30 25 L 30 35 L 0 35 Z" fill="#11182B" />
-                {/* <!-- Handle (black) --> */}
-                <path d="M 5 35 L 5 45 L 12 52 L 20 45 L 20 35 Z" fill="#11182B" />
-                {/* <!-- Trigger (red) --> */}
-                <rect x="15" y="17" width="4" height="8" rx="1" fill="#EF4444" />
-                {/* <!-- Nozzle (gray) --> */}
-                <rect x="45" y="12" width="12" height="6" fill="#4B5563" />
+        <svg width="280" height="70" viewBox="0 0 280 70" className="drop-shadow-md">
+            <defs>
+                <linearGradient id="foamGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#0EA5E9" />
+                    <stop offset="100%" stopColor="#0284C7" />
+                </linearGradient>
+                <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#0EA5E9" />
+                    <stop offset="100%" stopColor="#0369A1" />
+                </linearGradient>
+            </defs>
+
+            <g transform="translate(10, 12)">
+                <circle cx="20" cy="20" r="22" fill="url(#iconGradient)" opacity="0.1" />
+                <path d="M 20 8 L 20 15 M 20 25 L 20 32 M 12 20 L 8 20 M 32 20 L 28 20 M 14 14 L 10 10 M 26 26 L 30 30 M 26 14 L 30 10 M 14 26 L 10 30"
+                      stroke="#0EA5E9" strokeWidth="2.5" strokeLinecap="round" />
+                <circle cx="20" cy="20" r="6" fill="none" stroke="#0EA5E9" strokeWidth="2.5" />
+                <circle cx="20" cy="20" r="2" fill="#0EA5E9" />
             </g>
 
-            {/* <!-- Text: FOAM CRMAI --> */}
-            <text x="70" y="45" fontFamily="Inter, sans-serif" fontSize="36" fontWeight="900" fill="#11182B" letterSpacing="-1">
-                FOAM
+            <text x="62" y="40" fontFamily="system-ui, -apple-system, sans-serif" fontSize="32" fontWeight="700" fill="#1E293B" letterSpacing="-0.5">
+                InsulaPro
             </text>
-            <text x="165" y="45" fontFamily="Inter, sans-serif" fontSize="36" fontWeight="500" fill="#DC2626" letterSpacing="-1">
-                CRMAI
+
+            <text x="63" y="58" fontFamily="system-ui, -apple-system, sans-serif" fontSize="11" fontWeight="500" fill="#64748B" letterSpacing="1.5">
+                BUSINESS SOLUTIONS
             </text>
-            
-            {/* <!-- Accent line (yellow) --> */}
-            <rect x="70" y="50" width="170" height="3" fill="#FBBF24" rx="1.5" />
         </svg>
     </div>
   );
