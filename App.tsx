@@ -27,10 +27,11 @@ import { Job, Employee, Task, Automation } from './components/types.ts';
 import Logo from './components/Logo.tsx';
 import CloudSync from './components/CloudSync.tsx';
 import AutomationPage from './components/AutomationPage.tsx';
+import DataImportExport from './components/DataImportExport.tsx';
 import { processAutomations } from './lib/automations.ts';
-import * as api from './lib/api.ts'; // Import the new API service layer
+import * as api from './lib/api.ts';
 
-export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard' | 'automations';
+export type Page = 'dashboard' | 'calculator' | 'costing' | 'customers' | 'customerDetail' | 'jobsList' | 'jobDetail' | 'materialOrder' | 'invoicing' | 'schedule' | 'gantt' | 'map' | 'settings' | 'team' | 'more' | 'timeclock' | 'inventory' | 'employeeDashboard' | 'automations' | 'import-export';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -567,6 +568,7 @@ const App: React.FC = () => {
       case 'timeclock': return <TimeClockPage employees={employees} jobs={jobs} />;
       case 'inventory': return <InventoryPage items={inventoryItems} onAddItem={handleAddInventoryItem} onUpdateItem={handleUpdateInventoryItem} onDeleteItem={handleDeleteInventoryItem} />;
       case 'automations': return <AutomationPage automations={automations} onAddAutomation={handleAddAutomation} onUpdateAutomation={handleUpdateAutomation} onDeleteAutomation={handleDeleteAutomation} />;
+      case 'import-export': return <DataImportExport customers={customers} inventory={inventoryItems} jobs={jobs} employees={employees} tasks={tasks} onImportCustomers={async (importedCustomers) => { for (const c of importedCustomers) { await handleAddCustomer(c); } }} onImportInventory={async (importedItems) => { for (const item of importedItems) { await handleAddInventoryItem(item); } }} onImportEmployees={async (importedEmployees) => { for (const emp of importedEmployees) { await handleAddEmployee(emp); } }} />;
       default: return <Dashboard jobs={jobs} onViewJob={handleViewJob} onNavigateToFilteredJobs={(status) => { setFilter(status); setPage('jobsList'); }} onNavigate={setPage} tasks={tasks} employees={employees} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onToggleTaskCompletion={handleToggleTaskCompletion} />;
     }
   };
