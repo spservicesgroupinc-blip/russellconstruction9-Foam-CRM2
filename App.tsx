@@ -616,7 +616,7 @@ const App: React.FC = () => {
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">
-            <main className={`flex-grow overflow-y-auto ${currentUser ? 'pb-24 md:pb-0' : ''}`}>
+            <main className={`flex-grow overflow-y-auto ${currentUser ? 'pb-32 md:pb-0' : ''}`}>
                 {renderPage()}
             </main>
         </div>
