@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Page } from '../App.tsx';
-import { db } from '../lib/db.ts';
+import { getCustomers, getJobs, getInventoryItems, getEmployees, getTasks } from '../lib/api.ts';
 
 interface MorePageProps {
   onNavigate: (page: Page) => void;
@@ -74,11 +74,11 @@ const MorePage: React.FC<MorePageProps> = ({ onNavigate, onLogout }) => {
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-        const customers = await db.customers.toArray();
-        const jobs = await db.estimates.toArray();
-        const inventory = await db.inventory.toArray();
-        const employees = await db.employees.toArray();
-        const tasks = await db.tasks.toArray();
+        const customers = await getCustomers();
+        const jobs = await getJobs();
+        const inventory = await getInventoryItems();
+        const employees = await getEmployees();
+        const tasks = await getTasks();
 
         if (customers.length > 0) downloadCSV(convertToCSV(customers), 'customers.csv');
         await new Promise(r => setTimeout(r, 200));

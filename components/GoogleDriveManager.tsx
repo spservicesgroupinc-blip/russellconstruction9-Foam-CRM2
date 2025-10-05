@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { db } from '../lib/db.ts';
+import { getDriveFiles, addDriveFile, deleteDriveFile } from '../lib/api.ts';
 import { DriveFile } from './types.ts';
 import { useGoogleAuth } from '../hooks/useGoogleAuth.ts';
 
@@ -15,7 +15,7 @@ const GoogleDriveManager: React.FC<GoogleDriveManagerProps> = ({ customerId }) =
     const loadLinkedFiles = useCallback(async () => {
         setIsLoading(true);
         try {
-            const files = await db.drive_files.where('customerId').equals(customerId).toArray();
+            const files = await getDriveFiles(customerId);
             setLinkedFiles(files);
         } catch (error) {
             console.error("Error loading linked files from DB:", error);
@@ -66,8 +66,8 @@ const GoogleDriveManager: React.FC<GoogleDriveManagerProps> = ({ customerId }) =
     const handleUnlinkFile = async (fileId: number) => {
         if (window.confirm("Are you sure you want to unlink this file? This will not delete it from Google Drive.")) {
             try {
-                await db.drive_files.delete(fileId);
-                loadLinkedFiles(); // Refresh
+                await deleteDriveFile(fileId);
+                loadLinkedFiles();
             } catch (error) {
                 console.error("Error unlinking file:", error);
             }

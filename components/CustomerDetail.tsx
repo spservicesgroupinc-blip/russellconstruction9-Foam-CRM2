@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CustomerInfo } from './EstimatePDF.tsx';
-import { getEstimatesForCustomer, EstimateRecord, db, JobStatus } from '../lib/db.ts';
+import { EstimateRecord, JobStatus } from '../lib/db.ts';
+import { getCustomers, getJobs } from '../lib/api.ts';
 import GoogleDriveManager from './GoogleDriveManager.tsx';
 
 interface CustomerDetailProps {
@@ -53,11 +54,13 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack, onV
         const loadData = async () => {
             setIsLoading(true);
             try {
-                const currentCustomer = await db.customers.get(customerId);
+                const allCustomers = await getCustomers();
+                const currentCustomer = allCustomers.find(c => c.id === customerId);
                 if (currentCustomer) {
                     setCustomer(currentCustomer);
                     setEditedNotes(currentCustomer.notes || '');
-                    const customerEstimates = await getEstimatesForCustomer(customerId);
+                    const allJobs = await getJobs();
+                    const customerEstimates = allJobs.filter(j => j.customerId === customerId);
                     setEstimates(customerEstimates.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
                 } else {
                     setCustomer(null);
@@ -155,7 +158,8 @@ const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId, onBack, onV
             await onUpdateCustomer({ ...customer, notes: editedNotes });
             setIsEditingNotes(false);
             // Re-fetch customer to ensure UI is in sync
-            const updatedCustomer = await db.customers.get(customerId);
+            const allCustomers = await getCustomers();
+            const updatedCustomer = allCustomers.find(c => c.id === customerId);
             setCustomer(updatedCustomer || null);
         }
     };

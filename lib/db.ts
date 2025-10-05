@@ -74,13 +74,24 @@ export async function getEstimatesForCustomer(customerId: number): Promise<Estim
 }
 
 export async function getTimeEntriesForJob(jobId: number): Promise<TimeEntry[]> {
-    return db.time_log.where('jobId').equals(jobId).toArray();
+    const { getTimeEntries } = await import('./api.ts');
+    const allEntries = await getTimeEntries();
+    return allEntries.filter(e => e.jobId === jobId);
 }
 
 export async function getActiveTimeEntry(employeeId: number): Promise<TimeEntry | undefined> {
-    return db.time_log.where({ employeeId }).filter(entry => !entry.endTime).first();
+    const { getTimeEntries } = await import('./api.ts');
+    const allEntries = await getTimeEntries();
+    return allEntries.find(e => e.employeeId === employeeId && !e.endTime);
 }
 
 export async function saveTimeEntry(entry: TimeEntry): Promise<number> {
-    return db.time_log.put(entry);
+    const { addTimeEntry, updateTimeEntry } = await import('./api.ts');
+    if (entry.id) {
+        await updateTimeEntry(entry);
+        return entry.id;
+    } else {
+        const newEntry = await addTimeEntry(entry);
+        return newEntry.id!;
+    }
 }
