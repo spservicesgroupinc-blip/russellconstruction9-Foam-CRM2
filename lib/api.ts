@@ -9,11 +9,15 @@ export const getCustomers = async (): Promise<CustomerInfo[]> => {
         .select('*')
         .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+        console.error('Error fetching customers:', error);
+        throw error;
+    }
     return data || [];
 };
 
 export const addCustomer = async (customer: Omit<CustomerInfo, 'id'>): Promise<CustomerInfo> => {
+    console.log('Adding customer:', customer);
     const { data, error } = await supabase
         .from('customers')
         .insert([{
@@ -28,7 +32,11 @@ export const addCustomer = async (customer: Omit<CustomerInfo, 'id'>): Promise<C
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) {
+        console.error('Error adding customer:', error);
+        throw error;
+    }
+    console.log('Customer added successfully:', data);
     return data;
 };
 
