@@ -2,6 +2,12 @@ import { supabase } from './supabase';
 import { EstimateRecord, InventoryItem, JobStatus } from './db';
 import { CustomerInfo } from '../components/EstimatePDF';
 import { Employee, Task, Automation, TimeEntry, DriveFile } from '../components/types';
+import { validateCustomer, validateEmployee, validateInventoryItem, validateTask, sanitizeCustomer, sanitizeEmployee } from './validation';
+
+const handleError = (operation: string, error: any) => {
+    console.error(`Error during ${operation}:`, error);
+    throw error;
+};
 
 export const getCustomers = async (): Promise<CustomerInfo[]> => {
     const { data, error } = await supabase
@@ -17,17 +23,20 @@ export const getCustomers = async (): Promise<CustomerInfo[]> => {
 };
 
 export const addCustomer = async (customer: Omit<CustomerInfo, 'id'>): Promise<CustomerInfo> => {
-    console.log('Adding customer:', customer);
+    const sanitized = sanitizeCustomer(customer) as Omit<CustomerInfo, 'id'>;
+    validateCustomer(sanitized);
+
+    console.log('Adding customer:', sanitized);
     const { data, error } = await supabase
         .from('customers')
         .insert([{
-            name: customer.name,
-            address: customer.address,
-            email: customer.email || '',
-            phone: customer.phone || '',
-            notes: customer.notes || '',
-            lat: customer.lat || null,
-            lng: customer.lng || null
+            name: sanitized.name,
+            address: sanitized.address,
+            email: sanitized.email || '',
+            phone: sanitized.phone || '',
+            notes: sanitized.notes || '',
+            lat: sanitized.lat || null,
+            lng: sanitized.lng || null
         }])
         .select()
         .single();
@@ -41,20 +50,23 @@ export const addCustomer = async (customer: Omit<CustomerInfo, 'id'>): Promise<C
 };
 
 export const updateCustomer = async (customer: CustomerInfo): Promise<void> => {
+    const sanitized = sanitizeCustomer(customer) as CustomerInfo;
+    validateCustomer(sanitized);
+
     const { error } = await supabase
         .from('customers')
         .update({
-            name: customer.name,
-            address: customer.address,
-            email: customer.email || '',
-            phone: customer.phone || '',
-            notes: customer.notes || '',
-            lat: customer.lat || null,
-            lng: customer.lng || null
+            name: sanitized.name,
+            address: sanitized.address,
+            email: sanitized.email || '',
+            phone: sanitized.phone || '',
+            notes: sanitized.notes || '',
+            lat: sanitized.lat || null,
+            lng: sanitized.lng || null
         })
-        .eq('id', customer.id);
+        .eq('id', sanitized.id);
 
-    if (error) throw error;
+    if (error) handleError('updateCustomer', error);
 };
 
 export const getJobs = async (): Promise<EstimateRecord[]> => {
@@ -165,17 +177,20 @@ export const getEmployees = async (): Promise<Employee[]> => {
 };
 
 export const addEmployee = async (employee: Omit<Employee, 'id'>): Promise<Employee> => {
+    const sanitized = sanitizeEmployee(employee) as Omit<Employee, 'id'>;
+    validateEmployee(sanitized);
+
     const { data, error } = await supabase
         .from('employees')
         .insert([{
-            name: employee.name,
-            role: employee.role,
-            pin: employee.pin
+            name: sanitized.name,
+            role: sanitized.role,
+            pin: sanitized.pin
         }])
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) handleError('addEmployee', error);
     return data;
 };
 
@@ -198,19 +213,21 @@ export const getInventoryItems = async (): Promise<InventoryItem[]> => {
 };
 
 export const addInventoryItem = async (item: Omit<InventoryItem, 'id'>): Promise<InventoryItem> => {
+    validateInventoryItem(item);
+
     const { data, error } = await supabase
         .from('inventory')
         .insert([{
-            name: item.name,
-            category: item.category,
+            name: item.name.trim(),
+            category: item.category.trim(),
             quantity: item.quantity,
             unit_cost: item.unitCost || null,
-            notes: item.notes || ''
+            notes: item.notes?.trim() || ''
         }])
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) handleError('addInventoryItem', error);
 
     return {
         id: data.id,
@@ -267,11 +284,13 @@ export const getTasks = async (): Promise<Task[]> => {
 };
 
 export const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' | 'completedAt'>): Promise<Task> => {
+    validateTask(task);
+
     const { data, error } = await supabase
         .from('tasks')
         .insert([{
-            title: task.title,
-            description: task.description || '',
+            title: task.title.trim(),
+            description: task.description?.trim() || '',
             due_date: task.dueDate || null,
             completed: false,
             assigned_to: task.assignedTo || []
@@ -279,7 +298,7 @@ export const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'completed' 
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) handleError('addTask', error);
 
     return {
         id: data.id,
@@ -569,4 +588,205 @@ export const deleteDriveFile = async (fileId: number): Promise<void> => {
         .eq('id', fileId);
 
     if (error) throw error;
+};
+
+export const getCustomerById = async (customerId: number): Promise<CustomerInfo | null> => {
+    const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', customerId)
+        .maybeSingle();
+
+    if (error) handleError('getCustomerById', error);
+    return data;
+};
+
+export const getJobsByCustomer = async (customerId: number): Promise<EstimateRecord[]> => {
+    const { data, error } = await supabase
+        .from('estimates')
+        .select('*')
+        .eq('customer_id', customerId)
+        .order('created_at', { ascending: false });
+
+    if (error) handleError('getJobsByCustomer', error);
+
+    return (data || []).map(row => ({
+        id: row.id,
+        customerId: row.customer_id,
+        estimateNumber: row.estimate_number,
+        status: row.status as JobStatus,
+        calcData: row.calc_data,
+        costsData: row.costs_data,
+        scopeOfWork: row.scope_of_work,
+        createdAt: row.created_at,
+        estimatePdf: new Blob(),
+        materialOrderPdf: new Blob(),
+        invoicePdf: row.invoice_pdf_url ? new Blob() : undefined
+    }));
+};
+
+export const getJobsByStatus = async (status: JobStatus): Promise<EstimateRecord[]> => {
+    const { data, error } = await supabase
+        .from('estimates')
+        .select('*')
+        .eq('status', status)
+        .order('created_at', { ascending: false });
+
+    if (error) handleError('getJobsByStatus', error);
+
+    return (data || []).map(row => ({
+        id: row.id,
+        customerId: row.customer_id,
+        estimateNumber: row.estimate_number,
+        status: row.status as JobStatus,
+        calcData: row.calc_data,
+        costsData: row.costs_data,
+        scopeOfWork: row.scope_of_work,
+        createdAt: row.created_at,
+        estimatePdf: new Blob(),
+        materialOrderPdf: new Blob(),
+        invoicePdf: row.invoice_pdf_url ? new Blob() : undefined
+    }));
+};
+
+export const getTimeEntriesByEmployee = async (employeeId: number): Promise<TimeEntry[]> => {
+    const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('employee_id', employeeId)
+        .order('start_time', { ascending: false });
+
+    if (error) handleError('getTimeEntriesByEmployee', error);
+
+    return (data || []).map(row => ({
+        id: row.id,
+        employeeId: row.employee_id,
+        jobId: row.job_id || 0,
+        startTime: row.start_time,
+        endTime: row.end_time || undefined,
+        startLat: row.start_lat || undefined,
+        startLng: row.start_lng || undefined,
+        endLat: row.end_lat || undefined,
+        endLng: row.end_lng || undefined,
+        durationHours: row.duration_hours || undefined
+    }));
+};
+
+export const getTimeEntriesByJob = async (jobId: number): Promise<TimeEntry[]> => {
+    const { data, error } = await supabase
+        .from('time_entries')
+        .select('*')
+        .eq('job_id', jobId)
+        .order('start_time', { ascending: false });
+
+    if (error) handleError('getTimeEntriesByJob', error);
+
+    return (data || []).map(row => ({
+        id: row.id,
+        employeeId: row.employee_id,
+        jobId: row.job_id || 0,
+        startTime: row.start_time,
+        endTime: row.end_time || undefined,
+        startLat: row.start_lat || undefined,
+        startLng: row.start_lng || undefined,
+        endLat: row.end_lat || undefined,
+        endLng: row.end_lng || undefined,
+        durationHours: row.duration_hours || undefined
+    }));
+};
+
+export const getInventoryByCategory = async (category: string): Promise<InventoryItem[]> => {
+    const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .eq('category', category)
+        .order('name');
+
+    if (error) handleError('getInventoryByCategory', error);
+
+    return (data || []).map(row => ({
+        id: row.id,
+        name: row.name,
+        category: row.category,
+        quantity: row.quantity,
+        unitCost: row.unit_cost || undefined,
+        notes: row.notes || ''
+    }));
+};
+
+export const searchCustomers = async (searchTerm: string): Promise<CustomerInfo[]> => {
+    const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .or(`name.ilike.%${searchTerm}%,address.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`)
+        .order('created_at', { ascending: false });
+
+    if (error) handleError('searchCustomers', error);
+    return data || [];
+};
+
+export const getEmployeeByPin = async (pin: string): Promise<Employee | null> => {
+    const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('pin', pin)
+        .maybeSingle();
+
+    if (error) handleError('getEmployeeByPin', error);
+    return data;
+};
+
+export const deleteCustomer = async (customerId: number): Promise<void> => {
+    const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', customerId);
+
+    if (error) handleError('deleteCustomer', error);
+};
+
+export const deleteEmployee = async (employeeId: number): Promise<void> => {
+    const { error } = await supabase
+        .from('employees')
+        .delete()
+        .eq('id', employeeId);
+
+    if (error) handleError('deleteEmployee', error);
+};
+
+export const updateEmployee = async (employee: Employee): Promise<void> => {
+    const { error } = await supabase
+        .from('employees')
+        .update({
+            name: employee.name,
+            role: employee.role,
+            pin: employee.pin
+        })
+        .eq('id', employee.id);
+
+    if (error) handleError('updateEmployee', error);
+};
+
+export const getDashboardStats = async () => {
+    const [customers, jobs, employees, tasks] = await Promise.all([
+        getCustomers(),
+        getJobs(),
+        getEmployees(),
+        getTasks()
+    ]);
+
+    const activeJobs = jobs.filter(j => j.status !== 'paid').length;
+    const pendingTasks = tasks.filter(t => !t.completed).length;
+    const totalRevenue = jobs
+        .filter(j => j.status === 'paid')
+        .reduce((sum, j) => sum + (j.costsData?.totalMaterialCost || 0) + (j.costsData?.laborAndEquipmentCost || 0) + (j.costsData?.additionalCostsTotal || 0), 0);
+
+    return {
+        totalCustomers: customers.length,
+        activeJobs,
+        totalEmployees: employees.length,
+        pendingTasks,
+        totalRevenue,
+        jobs: jobs.slice(0, 10)
+    };
 };
